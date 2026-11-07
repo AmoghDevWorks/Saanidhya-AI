@@ -1,9 +1,17 @@
-import React from 'react'
+import { BrowserRouter } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import AppRoutes from './routes/AppRoutes';
 
-const App = () => {
+function App() {
   return (
-    <div className='bg-black'>App</div>
-  )
+    <BrowserRouter>
+      <AuthProvider>
+        <div className="min-h-screen bg-[#FAF8F5] text-slate-800 font-sans selection:bg-blue-100 selection:text-blue-900">
+          <AppRoutes />
+        </div>
+      </AuthProvider>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;
