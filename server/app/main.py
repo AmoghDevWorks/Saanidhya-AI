@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import init_indexes, close_mongo_connection
 from app.routes.auth import router as auth_router
+from app.routes.checkin import router as checkin_router
+from app.routes.family import router as family_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,8 +52,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount Authentication API router
+# Mount API routers
 app.include_router(auth_router, prefix="/api/auth")
+app.include_router(checkin_router, prefix="/api/checkin")
+app.include_router(family_router, prefix="/api/family")
 
 
 @app.get("/", tags=["Health"])

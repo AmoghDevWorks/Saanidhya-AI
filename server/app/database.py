@@ -53,6 +53,24 @@ def get_users_collection() -> Collection:
     return db["users"]
 
 
+def get_checkins_collection() -> Collection:
+    """Dependency injection helper to get the checkins collection."""
+    db = get_database()
+    return db["checkins"]
+
+
+def get_alerts_collection() -> Collection:
+    """Dependency injection helper to get the family alerts collection."""
+    db = get_database()
+    return db["alerts"]
+
+
+def get_reminders_collection() -> Collection:
+    """Dependency injection helper to get the reminders collection."""
+    db = get_database()
+    return db["reminders"]
+
+
 def init_indexes():
     """Initialize database indexes on startup (e.g. unique email index)."""
     if is_placeholder_uri(settings.MONGODB_URI):

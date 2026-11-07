@@ -1,7 +1,10 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from '../pages/Login';
 import Signup from '../pages/Signup';
-import DashboardPlaceholder from '../pages/DashboardPlaceholder';
+import ElderlyDashboard from '../pages/ElderlyDashboard';
+import FamilyDashboard from '../pages/FamilyDashboard';
+import VoiceCheckin from '../pages/VoiceCheckin';
+import ConversationHistory from '../pages/ConversationHistory';
 import ProtectedRoute from './ProtectedRoute';
 import { useAuth } from '../context/useAuth';
 
@@ -36,7 +39,7 @@ export const AppRoutes = () => {
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <DashboardPlaceholder pageTitle="Elderly Care Dashboard (Voice & Wellness)" />
+            <ElderlyDashboard />
           </ProtectedRoute>
         }
       />
@@ -44,7 +47,7 @@ export const AppRoutes = () => {
         path="/family"
         element={
           <ProtectedRoute>
-            <DashboardPlaceholder pageTitle="Family Care Circle (Caregiver Portal)" />
+            <FamilyDashboard />
           </ProtectedRoute>
         }
       />
@@ -52,7 +55,7 @@ export const AppRoutes = () => {
         path="/check-in"
         element={
           <ProtectedRoute>
-            <DashboardPlaceholder pageTitle="Daily Voice Check-in (Prisma + Timbre)" />
+            <VoiceCheckin />
           </ProtectedRoute>
         }
       />
@@ -60,7 +63,7 @@ export const AppRoutes = () => {
         path="/history"
         element={
           <ProtectedRoute>
-            <DashboardPlaceholder pageTitle="Wellness & Conversational History (Evon)" />
+            <ConversationHistory />
           </ProtectedRoute>
         }
       />
