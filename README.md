@@ -66,13 +66,19 @@ Saanidhya-AI/
 ├── server/                     # FastAPI backend
 │   ├── app/
 │   │   ├── routes/
-│   │   │   ├── voice.py
+│   │   │   ├── auth.py
 │   │   │   ├── checkin.py
-│   │   │   └── family.py
+│   │   │   ├── family.py
+│   │   │   ├── memory.py
+│   │   │   └── voice.py
+│   │   ├── repositories/
+│   │   │   └── memory_repository.py
 │   │   ├── services/
 │   │   │   ├── gnani_service.py
+│   │   │   ├── memory_extraction_service.py
+│   │   │   ├── memory_retrieval_service.py
 │   │   │   └── memory_service.py
-│   │   ├── models/
+│   │   ├── schemas/
 │   │   └── main.py
 │   ├── .env
 │   └── requirements.txt
@@ -233,59 +239,39 @@ FastAPI automatically generates interactive API documentation.
 
 ## 🔌 API Endpoints
 
-The initial backend scaffold provides:
+The complete route inventory, section purposes, authentication requirements,
+and current limitations are documented in
+[server/ROUTES.md](<server/ROUTES.md>).
+
+### Public routes
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/` | Backend health information |
+| GET | `/` | Backend health information and documentation links |
+| GET | `/health` | Lightweight health check |
+| POST | `/api/auth/register` | Register an elderly or family account |
+| POST | `/api/auth/login` | Authenticate and receive a JWT |
 
-Voice pipeline endpoints are authenticated and user-scoped:
+### Authenticated route groups
 
-| Method | Endpoint | Description |
+| Group | Prefix | Serves |
 |---|---|---|
-| POST | `/api/voice/transcribe` | Send audio to the Prisma adapter |
-| POST | `/api/voice/respond` | Send a transcript and context to the Evon adapter |
-| POST | `/api/voice/synthesize` | Send response text to the Timbre adapter |
-| POST | `/api/checkin/start` | Start a persisted check-in session |
-| POST | `/api/checkin/{session_id}/message` | Process a conversation turn |
-| POST | `/api/checkin/{session_id}/end` | End and persist the session |
+| Authentication | `/api/auth` | Current profile and logout |
+| Check-ins | `/api/checkin` | Daily conversations, sessions, summaries, and history |
+| Voice | `/api/voice` | Prisma transcription, Evon responses, and Timbre synthesis |
+| Memory | `/api/memory` | Private memory review, consent, editing, and deletion |
+| Family | `/api/family` | Caregiver dashboard, alerts, and reminders |
+| Notifications | `/api/notifications` | Family in-app notification feed and read state |
+| Alerts | `/api/alerts` | Relationship-scoped alert viewing and lifecycle |
+| Reminders | `/api/reminders` | User-owned routine, medication, event, and follow-up reminders |
+| Check-in schedules | `/api/schedules/checkins` | Recurring scheduled check-in configuration and history |
 
-Private conversational memory endpoints are also authenticated and user-scoped:
-
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/memory` | List the current user's memories and consent status |
-| GET | `/api/memory/{memory_id}` | Retrieve one memory |
-| PATCH | `/api/memory/{memory_id}` | Edit one memory |
-| DELETE | `/api/memory/{memory_id}` | Delete one memory |
-| DELETE | `/api/memory` | Delete all memories and disable consent |
-| GET | `/api/memory/follow-ups` | List unresolved follow-up memories |
-| PATCH | `/api/memory/preferences` | Enable or disable persistent memory |
+All authenticated routes require `Authorization: Bearer <JWT>`. FastAPI's
+interactive documentation is available at `http://localhost:8000/docs`.
 
 Memory persistence is opt-in. New accounts start with memory disabled, and
-disabling it deletes the user's stored memories. Memory extraction stores only
-explicit user statements from completed check-ins; raw audio and technical
-confidence values are not exposed in the memory dashboard.
-
-The repository does not include official Gnani API documentation. The three
-provider adapters therefore return an explicit `503` integration-unavailable
-response rather than guessing URLs, headers, payloads, or response schemas.
-To complete the live integration, provide the official contracts for each model:
-endpoint URL, authentication scheme, request format, supported audio/media
-formats, language/voice parameters, response schema, timeout and error rules.
-| GET | `/health` | Health check |
-
-Planned application endpoints:
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/voice/transcribe` | Transcribe voice using Prisma |
-| POST | `/checkin/analyze` | Analyze check-in using Evon |
-| POST | `/voice/respond` | Generate speech using Timbre |
-| GET | `/family/summary` | Retrieve family updates |
-| GET | `/checkin/history` | Retrieve previous check-ins |
-
-*Note: Planned endpoints will become available as their implementations are added.*
+disabling it deletes stored memories. Memory extraction stores only explicit
+user statements from completed check-ins; raw audio is not stored as memory.
 
 ---
 
@@ -355,10 +341,25 @@ Once both servers are running:
 
 ---
 
+## ⚠️ Current Limitations
+
+- Official Gnani API contracts are not present, so Prisma, Evon, and Timbre
+  adapters currently return explicit `503` integration-unavailable responses.
+- Family-to-senior linking and granular sharing permissions are not yet fully
+- implemented for all dashboard data paths.
+- Reminder creation is not yet fully persisted.
+- Some dashboard services still contain fallback/demo data.
+- External notification delivery channels such as SMS, WhatsApp, email, and
+  push notifications are not configured.
+- The scheduler creates in-app notifications only; it cannot place calls or
+  start microphone recording without user interaction and browser permission.
+
+See [server/ROUTES.md](<server/ROUTES.md>) for route-level details.
+
 ## 🌱 Future Enhancements
 
 - Emergency contact escalation.
-- Long-term conversational memory.
+- Advanced long-term conversational memory and consolidation.
 - Mood and wellness trends.
 - Voice-based reading of messages and documents.
 - Additional regional language and dialect support.

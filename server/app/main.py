@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +11,9 @@ from app.routes.checkin import router as checkin_router
 from app.routes.family import router as family_router
 from app.routes.voice import router as voice_router
 from app.routes.memory import router as memory_router
+from app.routes.notifications import router as notifications_router
+from app.routes.reminders import router as reminders_router
+from app.services.scheduler_service import scheduler_loop
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,7 +27,11 @@ async def lifespan(app: FastAPI):
     # Startup: attempt to initialize database indexes
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     init_indexes()
+    stop_scheduler = asyncio.Event()
+    scheduler_task = asyncio.create_task(scheduler_loop(stop_scheduler))
     yield
+    stop_scheduler.set()
+    await scheduler_task
     # Shutdown: close MongoDB connection pool
     close_mongo_connection()
     logger.info(f"Shutting down {settings.APP_NAME}")
@@ -60,6 +68,8 @@ app.include_router(checkin_router, prefix="/api/checkin")
 app.include_router(family_router, prefix="/api/family")
 app.include_router(voice_router, prefix="/api/voice")
 app.include_router(memory_router)
+app.include_router(notifications_router)
+app.include_router(reminders_router)
 
 
 @app.get("/", tags=["Health"])

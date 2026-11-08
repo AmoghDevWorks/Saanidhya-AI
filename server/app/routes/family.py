@@ -17,8 +17,14 @@ from app.schemas.family import (
     CreateReminderRequest,
 )
 from app.services.memory_service import get_family_dashboard_data
+from fastapi import HTTPException
 
 router = APIRouter(prefix="", tags=["Family"])
+
+
+def require_family(current_user: UserResponse) -> None:
+    if current_user.account_type.value != "family":
+        raise HTTPException(status_code=403, detail="Family account required.")
 
 
 @router.get(
@@ -34,6 +40,7 @@ async def get_family_dashboard(
     reminders_col: Collection = Depends(get_reminders_collection),
 ):
     """Retrieve connected senior's wellness overview, alerts, and recent check-ins."""
+    require_family(current_user)
     return get_family_dashboard_data(
         users_col,
         checkins_col,
@@ -54,6 +61,7 @@ async def acknowledge_alert(
     alerts_col: Collection = Depends(get_alerts_collection),
 ):
     """Mark an alert as acknowledged by the caregiver."""
+    require_family(current_user)
     try:
         alerts_col.update_one(
             {"_id": alert_id}, {"$set": {"is_acknowledged": True}}
@@ -74,6 +82,7 @@ async def create_reminder(
     reminders_col: Collection = Depends(get_reminders_collection),
 ):
     """Add a scheduled reminder for the senior."""
+    require_family(current_user)
     return {
         "success": True,
         "message": f"Reminder '{payload.title}' scheduled for {payload.time}.",

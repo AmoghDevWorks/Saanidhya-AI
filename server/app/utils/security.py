@@ -2,7 +2,12 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 import jwt
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
+from argon2.exceptions import VerifyMismatchError, VerificationError
+
+try:
+    from argon2.exceptions import InvalidHashError
+except ImportError:
+    from argon2.exceptions import InvalidHash as InvalidHashError
 from app.config import settings
 
 # Argon2 Password Hasher instance with recommended parameters

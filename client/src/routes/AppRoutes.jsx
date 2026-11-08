@@ -7,6 +7,8 @@ import VoiceCheckin from '../pages/VoiceCheckin';
 import ConversationHistory from '../pages/ConversationHistory';
 import ProtectedRoute from './ProtectedRoute';
 import Memories from '../pages/Memories';
+import Notifications from '../pages/Notifications';
+import Reminders from '../pages/Reminders';
 import { useAuth } from '../context/useAuth';
 
 const RootRedirect = () => {
@@ -73,6 +75,22 @@ export const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Memories />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <Notifications />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reminders"
+        element={
+          <ProtectedRoute>
+            <Reminders />
           </ProtectedRoute>
         }
       />

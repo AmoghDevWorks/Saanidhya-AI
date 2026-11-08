@@ -77,6 +77,30 @@ def get_memories_collection() -> Collection:
     return db["memories"]
 
 
+def get_relationships_collection() -> Collection:
+    return get_database()["family_relationships"]
+
+
+def get_invitations_collection() -> Collection:
+    return get_database()["family_invitations"]
+
+
+def get_notifications_collection() -> Collection:
+    return get_database()["notifications"]
+
+
+def get_reminder_occurrences_collection() -> Collection:
+    return get_database()["reminder_occurrences"]
+
+
+def get_checkin_schedules_collection() -> Collection:
+    return get_database()["checkin_schedules"]
+
+
+def get_checkin_executions_collection() -> Collection:
+    return get_database()["checkin_executions"]
+
+
 def init_indexes():
     """Initialize database indexes on startup (e.g. unique email index)."""
     if is_placeholder_uri(settings.MONGODB_URI):
@@ -96,6 +120,32 @@ def init_indexes():
         )
         memories.create_index(
             [("user_id", ASCENDING), ("category", ASCENDING)], background=True
+        )
+        relationships = get_relationships_collection()
+        relationships.create_index(
+            [("family_user_id", ASCENDING), ("elderly_user_id", ASCENDING)],
+            unique=True,
+            background=True,
+        )
+        get_invitations_collection().create_index(
+            [("token", ASCENDING)], unique=True, background=True
+        )
+        get_notifications_collection().create_index(
+            [("recipient_user_id", ASCENDING), ("read", ASCENDING)],
+            background=True,
+        )
+        get_reminder_occurrences_collection().create_index(
+            [("user_id", ASCENDING), ("scheduled_for", ASCENDING)],
+            unique=True,
+            background=True,
+        )
+        get_checkin_schedules_collection().create_index(
+            [("user_id", ASCENDING), ("enabled", ASCENDING)], background=True
+        )
+        get_checkin_executions_collection().create_index(
+            [("schedule_id", ASCENDING), ("scheduled_for", ASCENDING)],
+            unique=True,
+            background=True,
         )
     except Exception as e:
         logger.warning(

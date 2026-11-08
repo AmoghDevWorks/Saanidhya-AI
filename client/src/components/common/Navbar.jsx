@@ -11,6 +11,8 @@ import {
   X,
   Users,
   Brain,
+  Bell,
+  CalendarClock,
 } from 'lucide-react';
 
 export const Navbar = () => {
@@ -31,6 +33,8 @@ export const Navbar = () => {
   const familyNavLinks = [
     { name: 'Overview', path: '/family', icon: Users },
     { name: 'Check-in History', path: '/history', icon: Clock },
+    { name: 'Notifications', path: '/notifications', icon: Bell },
+    { name: 'Reminders', path: '/reminders', icon: CalendarClock },
   ];
 
   const links = isElderly ? seniorNavLinks : familyNavLinks;
