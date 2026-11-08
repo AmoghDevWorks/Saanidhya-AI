@@ -1,6 +1,8 @@
 # Backend Route Analysis
 
-The FastAPI application is registered in `main.py`. It exposes health endpoints plus five functional API sections.
+The FastAPI application is registered in `main.py`. It exposes health,
+authentication, check-in, voice, memory, family, notification, alert, reminder,
+and scheduled check-in routes.
 
 ## 1. Health and Application Status
 
@@ -40,15 +42,20 @@ Implemented in `app/routes/checkin.py`.
 | Method | Route | Auth | Serves |
 |---|---|---|---|
 | GET | `/api/checkin/today` | Required | Today's check-in status and wellness summary. |
-| POST | `/api/checkin/save` | Required | Legacy save endpoint for a completed dialogue and wellness markers. |
+| POST | `/api/checkin/save` | Required | Legacy save endpoint for a completed dialogue and wellness markers; retained for compatibility. |
 | GET | `/api/checkin/history` | Required | Previous check-ins for the authenticated user. |
 | POST | `/api/checkin/start` | Required | Creates an active check-in session and loads relevant memories when consent is enabled. |
 | POST | `/api/checkin/{session_id}/message` | Required | Processes a message in an active session through Evon. |
 | POST | `/api/checkin/{session_id}/end` | Required | Completes the session and schedules memory extraction. |
 
 The section serves the elderly user's daily wellness workflow: session
-lifecycle, dialogue persistence, wellness summaries, and connection to voice
-reasoning and conversational memory.
+lifecycle, dialogue persistence, wellness summaries, and the intended connection
+to voice reasoning and conversational memory.
+
+The session routes are implemented, but the Evon provider is currently
+unavailable. The legacy save route also applies defaults when optional wellness
+fields are omitted, so those values must not be interpreted as verified
+observations.
 
 ### Session lifecycle
 
@@ -80,7 +87,9 @@ Implemented in `app/routes/voice.py` and
 | POST | `/api/voice/synthesize` | Required | Timbre | Accepts response text and returns playable audio data. |
 
 This section keeps provider calls on the backend and separates speech
-recognition, reasoning, and speech synthesis.
+recognition, reasoning, and speech synthesis. The frontend recording and
+playback path is wired to these contracts, but no provider request is currently
+performed.
 
 Official Gnani API documentation is not currently present in the repository.
 The adapters therefore return an explicit `503` integration-unavailable error
@@ -104,12 +113,15 @@ Implemented in `app/routes/memory.py`, with persistence in
 | GET | `/api/memory/follow-ups` | Required | Lists memories categorized as unresolved follow-ups. |
 | PATCH | `/api/memory/preferences` | Required | Enables or disables persistent memory. Disabling deletes existing memories. |
 
-This section lets Saanidhya remember meaningful explicit user statements,
-retrieve relevant context for future check-ins, and give the user review,
-editing, consent, and deletion controls.
+This section lets Saanidhya store selected explicit user statements, retrieve
+recent context for future check-ins, and give the user review, editing, consent,
+and deletion controls.
 
 Memory is opt-in for new accounts. Repository operations always include the
-authenticated user's ID, preventing cross-user memory access.
+authenticated user's ID, preventing cross-user memory access. Extraction is
+currently conservative regex matching and retrieval is recency/confidence
+ranking; semantic similarity, conflict resolution, and memory supersession are
+not implemented.
 
 ## 6. Family and Caregiver Dashboard
 
@@ -121,7 +133,7 @@ Implemented in `app/routes/family.py`.
 |---|---|---|---|
 | GET | `/api/family/dashboard` | Required | Caregiver dashboard data: senior overview, recent check-ins, alerts, and reminders. |
 | POST | `/api/family/alerts/{alert_id}/acknowledge` | Required | Marks a caregiver alert as acknowledged. |
-| POST | `/api/family/reminders` | Required | Accepts reminder details for a senior. |
+| POST | `/api/family/reminders` | Family user | Legacy endpoint; validates family access and returns `410`. Use `/api/reminders` for persistent reminders. |
 
 This section is intended to keep caregivers informed about meaningful wellness
 updates without exposing private memories by default.
@@ -172,10 +184,12 @@ alert services.
 | GET | `/api/alerts/{alert_id}` | Family user | Retrieves one alert only when the family relationship is authorized. |
 | PATCH | `/api/alerts/{alert_id}/status` | Family user | Moves an alert through `new`, `acknowledged`, `in_progress`, `resolved`, or `dismissed`. |
 
-Alert generation is centralized in `alert_service.py`. Open alerts are
-deduplicated by elderly user, category, and deduplication key. Notifications
-are created only for accepted family relationships. External email, SMS,
-WhatsApp, and push delivery are not configured.
+The alert service supports deduplication by elderly user, category, and
+deduplication key, but all alert-producing paths do not yet use it consistently.
+Some check-in alerts are written directly to the alerts collection. Notification
+listing is scoped to the family recipient, but should also be revalidated
+against the current relationship and senior consent on every read. External
+email, SMS, WhatsApp, and push delivery are not configured.
 
 ## 8. Data Collections Used by Routes
 
@@ -234,25 +248,36 @@ Medication reminders never prove that medication was taken.
 
 The backend scheduler polls due reminders every 60 seconds after application
 startup. It atomically claims due reminders with a short processing lease,
-creates in-app notifications and idempotent occurrence records, and recovers
-leases after a worker interruption.
+creates in-app notifications and idempotent occurrence records, and can reclaim
+an expired lease after a worker interruption. It is still an in-process
+scheduler and is not a distributed production worker.
 It does not place phone calls or start microphone recording without user
 interaction and browser permission.
+
+Scheduled check-ins create a due execution and an in-app prompt. They do not
+automatically start a voice session, and missed, skipped, completed, and failed
+execution transitions are not fully implemented.
 
 ## 10. Route Error Conventions
 
 | Status | Meaning |
 |---|---|
 | Health endpoints | Implemented |
-| JWT authentication | Implemented |
-| Elderly check-ins | Implemented |
+| JWT authentication | Implemented; logout is client-side because tokens are stateless |
+| Elderly check-ins | Partially implemented; provider calls and interrupted-session cleanup remain |
 | Voice route contracts | Implemented |
-| Actual Gnani provider calls | Pending official API documentation |
-| Memory storage | Implemented |
+| Actual Gnani provider calls | Blocked pending official Prisma, Evon, and Timbre documentation and credentials |
+| Memory storage | Implemented with user-scoped MongoDB access |
+| Memory intelligence | Partial; regex extraction and recency ranking only |
 | Memory consent | Implemented |
-| Memory user isolation | Implemented |
-| Memory dashboard | Implemented |
-| Family role enforcement | Implemented on family and notification routes |
-| Reminder persistence | Implemented with MongoDB reminder and occurrence documents |
-| Family-to-senior authorization model | Implemented with hashed invitations, relationships, permissions, and consent |
-| Demo fallback data removal | Removed from live dashboard/history workflows |
+| Memory user isolation | Implemented in repository operations |
+| Memory dashboard | Implemented for review, edit, delete, and consent |
+| Family role enforcement | Implemented on family dashboard and family-only routes |
+| Family-to-senior authorization | Partial; invitation, relationship, permission, and consent checks exist, but management UI and complete read-time revalidation remain |
+| Alert generation | Partial; direct check-in alert writes bypass centralized deduplication/notification creation |
+| Notification access | Partial; recipient-scoped, but relationship and consent revalidation is incomplete |
+| Reminder persistence | Implemented for user-owned reminders and occurrences |
+| Reminder execution | Partial; in-process scheduler with in-app notifications only |
+| Scheduled check-ins | Partial; due prompts are created, but no automatic voice launch or complete missed lifecycle |
+| Wellness insights | Partial; keyword discomfort detection only |
+| Demo fallback data removal | Removed from the main live dashboard/history workflows; legacy/default values remain in some compatibility paths |
