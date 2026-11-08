@@ -6,9 +6,12 @@ export const checkinService = {
     return response.data;
   },
 
-  async transcribe(audioBlob) {
+  async transcribe(audioBlob, languageCode = 'indic-auto') {
     const formData = new FormData();
-    formData.append('audio', audioBlob, audioBlob.name || 'checkin.webm');
+    formData.append('audio', audioBlob, audioBlob.name || 'checkin.ogg');
+    formData.append('language_code', languageCode);
+    formData.append('model', 'prisma-v3.0');
+    formData.append('output_format', 'verbatim');
     const response = await api.post('/api/voice/transcribe', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });

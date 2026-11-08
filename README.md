@@ -280,15 +280,21 @@ user statements from completed check-ins; raw audio is not stored as memory.
 Saanidhya AI integrates Gnani AI's models to create a conversational voice experience.
 
 ### Prisma – Speech-to-Text
-Converts voice recordings into text while handling natural speech and regional language interactions.
+Uses the documented `POST https://api.vachana.ai/stt/v3` multipart endpoint with
+the `X-API-Key-ID` header. The backend sends Prisma v3.0 with configurable
+language and output format settings.
 
 ### Evon – Reasoning
-Processes conversations, extracts relevant information, and generates contextual responses.
+Uses model `gnani/gnani-evon-v3.3-30B-A3B` through the local Hugging Face
+Transformers adapter. Loading is lazy, cached, serialized to one inference at a
+time, and never starts during FastAPI application startup.
 
 ### Timbre – Text-to-Speech
-Converts generated responses into natural-sounding speech for elderly users.
+Uses the documented `POST https://api.vachana.ai/api/v1/tts/inference` endpoint
+and returns WAV audio encoded for frontend playback.
 
-Refer to the official Gnani AI developer documentation for API endpoints, authentication, request formats, and model configurations.
+Provider keys are backend-only. Configure the integration using
+`server/.env.example`; do not place keys in the React application.
 
 ---
 
@@ -347,8 +353,16 @@ Once both servers are running:
 
 ## ⚠️ Current Limitations
 
-- Official Gnani API contracts are not present, so Prisma, Evon, and Timbre
-  adapters currently return explicit `503` integration-unavailable responses.
+- Prisma and Timbre require configured provider keys and valid provider account
+  scopes. Evon requires the optional dependencies in
+  `server/requirements-evon.txt`.
+- The Evon repository contains roughly 63.5 GB of bfloat16 safetensor weights
+  across 13 shards. This exceeds the available 4 GB RTX 3050 VRAM and roughly
+  8.3 GB system RAM on the development laptop, so local inference is not
+  feasible on that laptop without a substantially larger-memory machine or a
+  verified quantized build.
+- Evon loading is lazy and reports a cached unavailable state instead of
+  repeatedly retrying or generating a fallback response.
 - Family dashboard access requires an accepted relationship, elderly sharing
   consent, and the relevant relationship permission.
 - Reminder and occurrence state is persisted in MongoDB; production deployments

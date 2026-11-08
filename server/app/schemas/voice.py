@@ -37,11 +37,13 @@ class RespondRequest(BaseModel):
     transcript: str = Field(..., min_length=1, max_length=10000)
     language: Optional[str] = None
     conversation: List[Dict[str, Any]] = Field(default_factory=list)
+    memory_context: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class SynthesizeRequest(BaseModel):
     response_text: str = Field(..., min_length=1, max_length=10000)
     language: Optional[str] = None
+    voice: Optional[str] = None
 
 
 class CheckinStartResponse(BaseModel):

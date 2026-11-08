@@ -83,18 +83,21 @@ Implemented in `app/routes/voice.py` and
 | Method | Route | Auth | Intended provider | Serves |
 |---|---|---|---|---|
 | POST | `/api/voice/transcribe` | Required | Prisma | Accepts an uploaded audio file and returns a transcript. |
-| POST | `/api/voice/respond` | Required | Evon | Accepts transcript and conversation context and returns structured response data. |
-| POST | `/api/voice/synthesize` | Required | Timbre | Accepts response text and returns playable audio data. |
+| POST | `/api/voice/respond` | Required | Evon | Accepts transcript, recent conversation, and consent-scoped memory context and returns structured response data. |
+| POST | `/api/voice/synthesize` | Required | Timbre | Accepts response text and returns base64-encoded playable audio data. |
+| GET | `/api/voice/evon/status` | Required | Local Evon | Reports whether the local Transformers model is disabled, not loaded, loading, ready, or unavailable. |
 
 This section keeps provider calls on the backend and separates speech
-recognition, reasoning, and speech synthesis. The frontend recording and
-playback path is wired to these contracts, but no provider request is currently
-performed.
+recognition, reasoning, and speech synthesis. Prisma uses the documented
+`https://api.vachana.ai/stt/v3` multipart contract and Timbre uses the documented
+`https://api.vachana.ai/api/v1/tts/inference` JSON contract. API keys remain
+backend-only. Provider timeouts, authentication failures, invalid audio, and
+invalid provider responses are surfaced as explicit errors.
 
-Official Gnani API documentation is not currently present in the repository.
-The adapters therefore return an explicit `503` integration-unavailable error
-instead of inventing provider URLs, headers, payloads, media formats, or
-response schemas.
+Evon runs only through the local Transformers adapter using
+`gnani/gnani-evon-v3.3-30B-A3B`. Loading is lazy, cached after success or
+failure, serialized to one inference at a time, and never occurs during FastAPI
+startup. `GET /api/voice/evon/status` reports the current local model state.
 
 ## 5. Conversational Memory
 
@@ -269,7 +272,8 @@ execution transitions are not fully implemented.
 | JWT authentication | Implemented; logout is client-side because tokens are stateless |
 | Elderly check-ins | Partially implemented; provider calls and interrupted-session cleanup remain |
 | Voice route contracts | Implemented |
-| Actual Gnani provider calls | Blocked pending official Prisma, Evon, and Timbre documentation and credentials |
+| Prisma/Timbre provider calls | Implemented when their backend API keys are configured |
+| Evon inference | Local Transformers implementation; the published weights are approximately 63.5 GB before runtime overhead and do not fit the development laptop's 4 GB VRAM/8.3 GB RAM |
 | Memory storage | Implemented with user-scoped MongoDB access |
 | Memory intelligence | Partial; regex extraction and recency ranking only |
 | Memory consent | Implemented |

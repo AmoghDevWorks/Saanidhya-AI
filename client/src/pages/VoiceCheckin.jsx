@@ -100,13 +100,26 @@ export const VoiceCheckin = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunks.current = [];
-      mediaRecorder.current = new MediaRecorder(stream);
+      const supportedMimeType = ['audio/ogg', 'audio/mp4']
+        .find((type) => MediaRecorder.isTypeSupported(type));
+      if (!supportedMimeType) {
+        stream.getTracks().forEach((track) => track.stop());
+        setVoiceState('error');
+        setErrorMessage('This browser cannot record in a format supported by the speech service.');
+        return;
+      }
+      mediaRecorder.current = new MediaRecorder(stream, { mimeType: supportedMimeType });
       mediaRecorder.current.ondataavailable = (event) => {
         if (event.data.size) audioChunks.current.push(event.data);
       };
       mediaRecorder.current.onstop = async () => {
         stream.getTracks().forEach((track) => track.stop());
-        const blob = new Blob(audioChunks.current, { type: mediaRecorder.current.mimeType });
+        const extension = mediaRecorder.current.mimeType.includes('mp4') ? 'm4a' : 'ogg';
+        const blob = new File(
+          audioChunks.current,
+          `checkin.${extension}`,
+          { type: mediaRecorder.current.mimeType },
+        );
         if (!blob.size) {
           setVoiceState('error');
           setErrorMessage('No audio was recorded. Please try again.');
