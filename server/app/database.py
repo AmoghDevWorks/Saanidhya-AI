@@ -122,9 +122,14 @@ def init_indexes():
             [("user_id", ASCENDING), ("category", ASCENDING)], background=True
         )
         relationships = get_relationships_collection()
+        try:
+            relationships.drop_index("family_user_id_1_elderly_user_id_1")
+        except Exception:
+            pass
         relationships.create_index(
             [("family_user_id", ASCENDING), ("elderly_user_id", ASCENDING)],
             unique=True,
+            partialFilterExpression={"status": {"$in": ["pending", "accepted"]}},
             background=True,
         )
         relationships.create_index(
@@ -141,6 +146,12 @@ def init_indexes():
             [("recipient_user_id", ASCENDING), ("read", ASCENDING)],
             background=True,
         )
+        get_notifications_collection().create_index(
+            [("recipient_user_id", ASCENDING), ("alert_id", ASCENDING)],
+            unique=True,
+            sparse=True,
+            background=True,
+        )
         get_reminder_occurrences_collection().create_index(
             [("reminder_id", ASCENDING), ("scheduled_for", ASCENDING)],
             unique=True,
@@ -153,6 +164,9 @@ def init_indexes():
         )
         get_alerts_collection().create_index(
             [("elderly_user_id", ASCENDING), ("status", ASCENDING)], background=True
+        )
+        get_alerts_collection().create_index(
+            [("active_key", ASCENDING)], unique=True, sparse=True, background=True
         )
         get_checkin_schedules_collection().create_index(
             [("user_id", ASCENDING), ("enabled", ASCENDING)], background=True

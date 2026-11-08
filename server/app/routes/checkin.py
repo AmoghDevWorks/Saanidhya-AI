@@ -10,7 +10,10 @@ from app.database import (
     get_alerts_collection,
     get_memories_collection,
     get_users_collection,
+    get_relationships_collection,
+    get_notifications_collection,
 )
+from app.repositories.notification_repository import NotificationRepository
 from app.repositories.memory_repository import MemoryRepository
 from app.routes.auth import get_current_user
 from app.schemas.auth import UserResponse
@@ -66,11 +69,15 @@ async def save_checkin(
     current_user: UserResponse = Depends(get_current_user),
     checkins_col: Collection = Depends(get_checkins_collection),
     alerts_col: Collection = Depends(get_alerts_collection),
+    relationships_col: Collection = Depends(get_relationships_collection),
+    notifications_col: Collection = Depends(get_notifications_collection),
+    users_col: Collection = Depends(get_users_collection),
 ):
     """Store conversation turns and extracted wellness markers."""
-    return save_voice_checkin(
-        checkins_col, alerts_col, current_user.id, payload
+    alert_repository = NotificationRepository(
+        relationships_col, alerts_col, notifications_col, users_col
     )
+    return save_voice_checkin(checkins_col, alert_repository, current_user.id, payload)
 
 
 @router.get(

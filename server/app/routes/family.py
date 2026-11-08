@@ -82,7 +82,11 @@ async def acknowledge_alert(
     )
     result = alerts_col.update_one(
         {"_id": alert_id, "elderly_user_id": str(senior["_id"])},
-        {"$set": {"status": "acknowledged", "updated_at": datetime.now(timezone.utc)}},
+        {"$set": {
+            "status": "acknowledged",
+            "updated_at": datetime.now(timezone.utc),
+            "acknowledged_by": current_user.id,
+        }},
     )
     if not result.matched_count:
         raise HTTPException(status_code=404, detail="Alert not found.")

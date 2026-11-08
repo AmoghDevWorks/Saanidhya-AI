@@ -13,6 +13,20 @@ class AcceptInvitationRequest(BaseModel):
     token: str = Field(..., min_length=16, max_length=200)
 
 
+class PermissionUpdateRequest(BaseModel):
+    permissions: dict[str, bool]
+
+
+class InvitationResponse(BaseModel):
+    id: str
+    elderly_user_id: str
+    family_user_id: str
+    relationship_type: str
+    status: str
+    expires_at: datetime
+    created_at: datetime
+
+
 class RelationshipResponse(BaseModel):
     id: str
     elderly_user_id: str
@@ -52,6 +66,8 @@ class AlertResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     resolution_note: Optional[str] = None
+    acknowledged_by: Optional[str] = None
+    resolved_by: Optional[str] = None
 
     model_config = {"populate_by_name": True}
 

@@ -338,6 +338,10 @@ Once both servers are running:
 - Use appropriate authentication and authorization for family access.
 - Obtain consent before storing voice recordings or conversation history.
 - Treat wellness alerts as indicators, not medical diagnoses.
+- Family relationship changes, notification reads, and alert actions are
+  reauthorized against current relationship permissions and elderly consent.
+- Check-in alerts use centralized active-alert and per-recipient notification
+  deduplication; resolving an alert permits a later independent event.
 
 ---
 
@@ -352,6 +356,8 @@ Once both servers are running:
 - Live dashboard and history workflows no longer return fabricated sample records.
 - External notification delivery channels such as SMS, WhatsApp, email, and
   push notifications are not configured.
+- Invitation tokens are shown only at creation time and must be transferred
+  to the invited family member through a trusted channel.
 - The scheduler creates in-app notifications only; it cannot place calls or
   start microphone recording without user interaction and browser permission.
 

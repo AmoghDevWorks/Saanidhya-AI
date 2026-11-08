@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -20,12 +21,18 @@ from app.schemas.notifications import (
     AlertStatusRequest,
     ConsentResponse,
     InvitationRequest,
+    InvitationResponse,
+    PermissionUpdateRequest,
     NotificationListResponse,
     NotificationResponse,
     RelationshipResponse,
     SharingPreferences,
 )
-from app.services.family_link_service import accept_invitation, create_invitation
+from app.services.family_link_service import (
+    accept_invitation,
+    create_invitation,
+    reject_invitation,
+)
 from app.services.family_authorization import linked_senior_ids
 
 router = APIRouter(tags=["Notifications and Family Access"])
@@ -45,8 +52,9 @@ def repository(
     relationships: Collection,
     alerts: Collection,
     notifications: Collection,
+    users: Collection | None = None,
 ) -> NotificationRepository:
-    return NotificationRepository(relationships, alerts, notifications)
+    return NotificationRepository(relationships, alerts, notifications, users)
 
 
 def alert_response(document):
@@ -62,6 +70,8 @@ def alert_response(document):
         created_at=document["created_at"],
         updated_at=document["updated_at"],
         resolution_note=document.get("resolution_note"),
+        acknowledged_by=document.get("acknowledged_by"),
+        resolved_by=document.get("resolved_by"),
     )
 
 
@@ -120,6 +130,67 @@ async def accept_family_invitation(
     return accept_invitation(current_user, payload.token, invitations, relationships)
 
 
+@router.get("/api/family/invitations", response_model=List[InvitationResponse])
+async def list_invitations(
+    current_user: UserResponse = Depends(get_current_user),
+    invitations: Collection = Depends(get_invitations_collection),
+):
+    query = (
+        {"family_user_id": current_user.id, "status": "pending"}
+        if current_user.account_type.value == "family"
+        else {"elderly_user_id": current_user.id, "status": "pending"}
+    )
+    return [
+        InvitationResponse(
+            id=str(item["_id"]),
+            elderly_user_id=str(item["elderly_user_id"]),
+            family_user_id=str(item["family_user_id"]),
+            relationship_type=item["relationship_type"],
+            status="expired" if item["expires_at"] <= datetime.now(timezone.utc) else item["status"],
+            expires_at=item["expires_at"],
+            created_at=item["created_at"],
+        )
+        for item in invitations.find(query).sort("created_at", -1)
+    ]
+
+
+@router.post("/api/family/invitations/reject", status_code=204)
+async def reject_family_invitation(
+    payload: AcceptInvitationRequest,
+    current_user: UserResponse = Depends(get_current_user),
+    invitations: Collection = Depends(get_invitations_collection),
+):
+    reject_invitation(current_user, payload.token, invitations)
+
+
+@router.patch("/api/family/relationships/{relationship_id}/permissions",
+              response_model=RelationshipResponse)
+async def update_relationship_permissions(
+    relationship_id: str,
+    payload: PermissionUpdateRequest,
+    current_user: UserResponse = Depends(get_current_user),
+    relationships: Collection = Depends(get_relationships_collection),
+):
+    require_elderly(current_user)
+    allowed = {
+        "wellness_summaries", "checkin_updates", "notifications_enabled",
+        "view_reminders", "manage_reminders",
+    }
+    if set(payload.permissions) - allowed:
+        raise HTTPException(status_code=400, detail="Unsupported relationship permission.")
+    result = relationships.find_one_and_update(
+        {
+            "_id": relationship_id,
+            "elderly_user_id": current_user.id,
+            "status": "accepted",
+        },
+        {"$set": {f"permissions.{key}": value for key, value in payload.permissions.items()}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Relationship not found.")
+    return relationship_response(result)
+
 @router.get("/api/family/relationships", response_model=List[RelationshipResponse])
 async def list_relationships(
     current_user: UserResponse = Depends(get_current_user),
@@ -150,7 +221,7 @@ async def revoke_relationship(
             ],
             "status": "accepted",
         },
-        {"$set": {"status": "revoked"}},
+        {"$set": {"status": "revoked", "revoked_at": datetime.now(timezone.utc)}},
     )
     if not result.modified_count:
         raise HTTPException(status_code=404, detail="Relationship not found.")
@@ -209,14 +280,24 @@ async def update_family_preferences(
 async def list_notifications(
     current_user: UserResponse = Depends(get_current_user),
     notifications: Collection = Depends(get_notifications_collection),
+    alerts: Collection = Depends(get_alerts_collection),
+    relationships: Collection = Depends(get_relationships_collection),
     users: Collection = Depends(get_users_collection),
 ):
     require_family(current_user)
-    items = list(
+    raw_items = list(
         notifications.find({"recipient_user_id": current_user.id})
         .sort("created_at", -1)
         .limit(50)
     )
+    elderly_ids = set(linked_senior_ids(
+        relationships, users, current_user.id, "notifications_enabled"
+    ))
+    items = [
+        item for item in raw_items
+        if not item.get("alert_id")
+        or (alerts.find_one({"_id": item["alert_id"]}) or {}).get("elderly_user_id") in elderly_ids
+    ]
     return NotificationListResponse(
         items=[notification_response(item) for item in items],
         unread_count=sum(1 for item in items if not item.get("read", False)),
@@ -227,11 +308,21 @@ async def list_notifications(
 async def unread_notifications(
     current_user: UserResponse = Depends(get_current_user),
     notifications: Collection = Depends(get_notifications_collection),
+    relationships: Collection = Depends(get_relationships_collection),
+    alerts: Collection = Depends(get_alerts_collection),
+    users: Collection = Depends(get_users_collection),
 ):
     require_family(current_user)
-    return {"unread_count": notifications.count_documents(
-        {"recipient_user_id": current_user.id, "read": False}
-    )}
+    raw_items = notifications.find({"recipient_user_id": current_user.id, "read": False})
+    elderly_ids = set(linked_senior_ids(
+        relationships, users, current_user.id, "notifications_enabled"
+    ))
+    count = sum(
+        1 for item in raw_items
+        if not item.get("alert_id")
+        or (alerts.find_one({"_id": item["alert_id"]}) or {}).get("elderly_user_id") in elderly_ids
+    )
+    return {"unread_count": count}
 
 
 @router.patch("/api/notifications/{notification_id}/read", status_code=204)
@@ -239,8 +330,23 @@ async def mark_notification_read(
     notification_id: str,
     current_user: UserResponse = Depends(get_current_user),
     notifications: Collection = Depends(get_notifications_collection),
+    relationships: Collection = Depends(get_relationships_collection),
+    alerts: Collection = Depends(get_alerts_collection),
+    users: Collection = Depends(get_users_collection),
 ):
     require_family(current_user)
+    item = notifications.find_one(
+        {"_id": notification_id, "recipient_user_id": current_user.id}
+    )
+    elderly_ids = set(linked_senior_ids(
+        relationships, users, current_user.id, "notifications_enabled"
+    ))
+    if not item or (
+        item.get("alert_id")
+        and (alerts.find_one({"_id": item["alert_id"]}) or {}).get("elderly_user_id")
+        not in elderly_ids
+    ):
+        raise HTTPException(status_code=404, detail="Notification not found.")
     result = notifications.update_one(
         {"_id": notification_id, "recipient_user_id": current_user.id},
         {"$set": {"read": True}},
@@ -253,12 +359,19 @@ async def mark_notification_read(
 async def mark_all_notifications_read(
     current_user: UserResponse = Depends(get_current_user),
     notifications: Collection = Depends(get_notifications_collection),
+    relationships: Collection = Depends(get_relationships_collection),
+    alerts: Collection = Depends(get_alerts_collection),
+    users: Collection = Depends(get_users_collection),
 ):
     require_family(current_user)
-    notifications.update_many(
-        {"recipient_user_id": current_user.id, "read": False},
-        {"$set": {"read": True}},
-    )
+    elderly_ids = set(linked_senior_ids(
+        relationships, users, current_user.id, "notifications_enabled"
+    ))
+    for item in notifications.find({"recipient_user_id": current_user.id, "read": False}):
+        if not item.get("alert_id") or (
+            alerts.find_one({"_id": item["alert_id"]}) or {}
+        ).get("elderly_user_id") in elderly_ids:
+            notifications.update_one({"_id": item["_id"]}, {"$set": {"read": True}})
 
 
 @router.get("/api/alerts", response_model=List[AlertResponse])
@@ -314,9 +427,18 @@ async def update_alert_status(
     changes = {"status": payload.status}
     if payload.resolution_note is not None:
         changes["resolution_note"] = payload.resolution_note
+    changes["updated_by"] = current_user.id
+    changes["updated_at"] = datetime.now(timezone.utc)
+    if payload.status == "acknowledged":
+        changes["acknowledged_by"] = current_user.id
+    if payload.status == "resolved":
+        changes["resolved_by"] = current_user.id
+    update = {"$set": changes}
+    if payload.status in {"resolved", "dismissed"}:
+        update["$unset"] = {"active_key": ""}
     result = alerts.find_one_and_update(
         {"_id": alert_id, "elderly_user_id": {"$in": elderly_ids}},
-        {"$set": changes},
+        update,
         return_document=ReturnDocument.AFTER,
     )
     if not result:

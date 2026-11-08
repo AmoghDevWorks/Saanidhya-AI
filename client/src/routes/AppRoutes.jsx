@@ -9,6 +9,7 @@ import ProtectedRoute from './ProtectedRoute';
 import Memories from '../pages/Memories';
 import Notifications from '../pages/Notifications';
 import Reminders from '../pages/Reminders';
+import FamilyRelationships from '../pages/FamilyRelationships';
 import { useAuth } from '../context/useAuth';
 
 const RootRedirect = () => {
@@ -85,6 +86,10 @@ export const AppRoutes = () => {
             <Notifications />
           </ProtectedRoute>
         }
+      />
+      <Route
+        path="/family/relationships"
+        element={<ProtectedRoute><FamilyRelationships /></ProtectedRoute>}
       />
       <Route
         path="/reminders"

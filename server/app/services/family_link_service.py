@@ -62,14 +62,13 @@ def accept_invitation(
     if current_user.account_type.value != "family":
         raise HTTPException(status_code=403, detail="Only family users can accept invitations.")
     now = datetime.now(timezone.utc)
-    invitation = invitations.find_one_and_update(
+    invitation = invitations.find_one(
         {
             "token_hash": _token_hash(token),
             "family_user_id": current_user.id,
             "status": "pending",
             "expires_at": {"$gt": now},
         },
-        {"$set": {"status": "accepted", "accepted_at": now}},
     )
     if not invitation:
         raise HTTPException(status_code=400, detail="Invitation is invalid or expired.")
@@ -103,4 +102,26 @@ def accept_invitation(
         relationships.insert_one(relationship)
     except DuplicateKeyError as exc:
         raise HTTPException(status_code=409, detail="An active family relationship already exists.") from exc
+    update = {"$set": {"status": "accepted", "accepted_at": now}}
+    if hasattr(invitations, "update_one"):
+        invitations.update_one({"_id": invitation["_id"], "status": "pending"}, update)
+    else:
+        invitations.find_one_and_update(
+            {"_id": invitation["_id"], "status": "pending"}, update
+        )
     return relationship
+
+
+def reject_invitation(current_user, token: str, invitations: Collection) -> None:
+    if current_user.account_type.value != "family":
+        raise HTTPException(status_code=403, detail="Only family users can reject invitations.")
+    result = invitations.update_one(
+        {
+            "token_hash": _token_hash(token),
+            "family_user_id": current_user.id,
+            "status": "pending",
+        },
+        {"$set": {"status": "rejected", "rejected_at": datetime.now(timezone.utc)}},
+    )
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Invitation not found.")

@@ -7,6 +7,8 @@ from app.database import (
     get_checkins_collection,
     get_alerts_collection,
     get_reminders_collection,
+    get_relationships_collection,
+    get_notifications_collection,
 )
 
 
@@ -69,17 +71,23 @@ def mock_db():
     checkins_col = MockCollection()
     alerts_col = MockCollection()
     reminders_col = MockCollection()
+    relationships_col = MockCollection()
+    notifications_col = MockCollection()
 
     app.dependency_overrides[get_users_collection] = lambda: users_col
     app.dependency_overrides[get_checkins_collection] = lambda: checkins_col
     app.dependency_overrides[get_alerts_collection] = lambda: alerts_col
     app.dependency_overrides[get_reminders_collection] = lambda: reminders_col
+    app.dependency_overrides[get_relationships_collection] = lambda: relationships_col
+    app.dependency_overrides[get_notifications_collection] = lambda: notifications_col
 
     yield {
         "users": users_col,
         "checkins": checkins_col,
         "alerts": alerts_col,
         "reminders": reminders_col,
+        "relationships": relationships_col,
+        "notifications": notifications_col,
     }
     app.dependency_overrides.clear()
 

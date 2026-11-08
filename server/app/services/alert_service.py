@@ -27,6 +27,8 @@ def generate_alert(
             "dedupe_key": dedupe_key,
         },
     )
-    for family_id in repository.linked_elderly_ids(elderly_id):
+    for family_id in repository.family_ids_for_elderly(
+        elderly_id, "notifications_enabled"
+    ):
         repository.create_notification(family_id, alert)
     return alert

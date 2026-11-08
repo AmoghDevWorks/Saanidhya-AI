@@ -4,6 +4,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 from pymongo.collection import Collection
 from pymongo.errors import PyMongoError
+from app.repositories.notification_repository import NotificationRepository
+from app.services.alert_service import generate_alert
 
 from app.schemas.checkin import (
     SaveCheckinRequest,
@@ -53,7 +55,7 @@ def format_checkin_doc(doc: Dict[str, Any]) -> CheckinResponse:
 
 def save_voice_checkin(
     checkins_col: Collection,
-    alerts_col: Collection,
+    alert_repository: NotificationRepository,
     user_id: str,
     payload: SaveCheckinRequest,
 ) -> CheckinResponse:
@@ -106,22 +108,19 @@ def save_voice_checkin(
         term in payload.physical_comfort.lower()
         for term in ["pain", "hurt", "stiff", "ache", "knee"]
     ):
-        alert_doc = {
-            "_id": str(uuid.uuid4()),
-            "elderly_user_id": user_id,
-            "category": "discomfort",
-            "severity": "attention",
-            "title": "Mild Physical Discomfort Logged",
-            "message": f"Senior reported: '{payload.physical_comfort}' during morning check-in.",
-            "status": "new",
-            "source": "checkin",
-            "created_at": now,
-            "updated_at": now,
-        }
         try:
-            alerts_col.insert_one(alert_doc)
-        except Exception as e:
-            logger.warning(f"Could not persist alert: {e}")
+            generate_alert(
+                alert_repository,
+                elderly_id=user_id,
+                category="discomfort",
+                severity="attention",
+                title="Mild Physical Discomfort Logged",
+                message=f"Senior reported: '{payload.physical_comfort}' during morning check-in.",
+                source="checkin",
+                dedupe_key=f"physical-comfort:{payload.physical_comfort.strip().lower()}",
+            )
+        except PyMongoError as e:
+            logger.warning("Could not persist centralized alert: %s", e)
 
     return format_checkin_doc(checkin_doc)
 

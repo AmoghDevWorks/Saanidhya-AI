@@ -34,6 +34,7 @@ export const Navbar = () => {
     { name: 'Overview', path: '/family', icon: Users },
     { name: 'Check-in History', path: '/history', icon: Clock },
     { name: 'Notifications', path: '/notifications', icon: Bell },
+    { name: 'Relationships', path: '/family/relationships', icon: Users },
     { name: 'Reminders', path: '/reminders', icon: CalendarClock },
   ];
 

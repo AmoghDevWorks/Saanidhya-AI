@@ -155,7 +155,10 @@ alert services.
 |---|---|---|---|
 | POST | `/api/family/invitations` | Elderly user | Creates a seven-day invitation for an existing family account; only a SHA-256 token hash is persisted. |
 | POST | `/api/family/invitations/accept` | Family user | Accepts a valid invitation token and creates an accepted relationship. |
+| POST | `/api/family/invitations/reject` | Family user | Rejects a pending invitation without exposing or storing the raw token. |
+| GET | `/api/family/invitations` | Authenticated user | Lists the current user's pending outgoing or incoming invitations; expired entries are labelled. |
 | GET | `/api/family/relationships` | Required | Lists accepted relationships involving the current user. |
+| PATCH | `/api/family/relationships/{relationship_id}/permissions` | Elderly user | Updates the linked family member's allow-list permissions. |
 | DELETE | `/api/family/relationships/{relationship_id}` | Related user | Revokes an accepted relationship. |
 
 ### Family sharing preferences
@@ -171,10 +174,10 @@ alert services.
 
 | Method | Route | Auth | Serves |
 |---|---|---|---|
-| GET | `/api/notifications` | Family user | Lists the user's notifications and unread count. |
-| GET | `/api/notifications/unread-count` | Family user | Returns the unread notification count. |
-| PATCH | `/api/notifications/{notification_id}/read` | Family user | Marks one owned notification as read. |
-| PATCH | `/api/notifications/read-all` | Family user | Marks all owned notifications as read. |
+| GET | `/api/notifications` | Family user | Lists the user's notifications and unread count after revalidating each linked senior's active relationship, notification permission, and current consent. |
+| GET | `/api/notifications/unread-count` | Family user | Returns the consent- and relationship-filtered unread count. |
+| PATCH | `/api/notifications/{notification_id}/read` | Family user | Marks one currently authorized notification as read. |
+| PATCH | `/api/notifications/read-all` | Family user | Marks all currently authorized notifications as read. |
 
 ### Alerts
 
@@ -184,12 +187,12 @@ alert services.
 | GET | `/api/alerts/{alert_id}` | Family user | Retrieves one alert only when the family relationship is authorized. |
 | PATCH | `/api/alerts/{alert_id}/status` | Family user | Moves an alert through `new`, `acknowledged`, `in_progress`, `resolved`, or `dismissed`. |
 
-The alert service supports deduplication by elderly user, category, and
-deduplication key, but all alert-producing paths do not yet use it consistently.
-Some check-in alerts are written directly to the alerts collection. Notification
-listing is scoped to the family recipient, but should also be revalidated
-against the current relationship and senior consent on every read. External
-email, SMS, WhatsApp, and push delivery are not configured.
+All check-in alert-producing paths use the centralized alert service. Active alerts
+are deduplicated with a unique `active_key`, and alert notifications use a unique
+recipient/alert key. Notifications are generated only for currently accepted
+relationships with notification permission and senior consent. Alert status changes
+record the actor and clear the active deduplication key when resolved or dismissed.
+External email, SMS, WhatsApp, and push delivery are not configured.
 
 ## 8. Data Collections Used by Routes
 
@@ -273,9 +276,9 @@ execution transitions are not fully implemented.
 | Memory user isolation | Implemented in repository operations |
 | Memory dashboard | Implemented for review, edit, delete, and consent |
 | Family role enforcement | Implemented on family dashboard and family-only routes |
-| Family-to-senior authorization | Partial; invitation, relationship, permission, and consent checks exist, but management UI and complete read-time revalidation remain |
-| Alert generation | Partial; direct check-in alert writes bypass centralized deduplication/notification creation |
-| Notification access | Partial; recipient-scoped, but relationship and consent revalidation is incomplete |
+| Family-to-senior authorization | Implemented for the Phase 1 relationship, permission, consent, alert, and notification paths; broader senior history/reminder delegation remains intentionally limited |
+| Alert generation | Implemented through the centralized service with active-alert and notification deduplication |
+| Notification access | Implemented with recipient ownership plus read-time relationship, permission, and consent revalidation |
 | Reminder persistence | Implemented for user-owned reminders and occurrences |
 | Reminder execution | Partial; in-process scheduler with in-app notifications only |
 | Scheduled check-ins | Partial; due prompts are created, but no automatic voice launch or complete missed lifecycle |

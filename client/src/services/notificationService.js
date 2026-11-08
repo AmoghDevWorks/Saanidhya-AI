@@ -18,6 +18,39 @@ const notificationService = {
     const response = await api.get('/api/alerts');
     return response.data;
   },
+
+  async listRelationships() {
+    const response = await api.get('/api/family/relationships');
+    return response.data;
+  },
+
+  async listInvitations() {
+    const response = await api.get('/api/family/invitations');
+    return response.data;
+  },
+
+  async inviteFamily(payload) {
+    const response = await api.post('/api/family/invitations', payload);
+    return response.data;
+  },
+
+  async acceptInvitation(token) {
+    const response = await api.post('/api/family/invitations/accept', { token });
+    return response.data;
+  },
+
+  async rejectInvitation(token) {
+    await api.post('/api/family/invitations/reject', { token });
+  },
+
+  async revokeRelationship(id) {
+    await api.delete(`/api/family/relationships/${id}`);
+  },
+
+  async updatePermissions(id, permissions) {
+    const response = await api.patch(`/api/family/relationships/${id}/permissions`, { permissions });
+    return response.data;
+  },
 };
 
 export default notificationService;
