@@ -345,10 +345,11 @@ Once both servers are running:
 
 - Official Gnani API contracts are not present, so Prisma, Evon, and Timbre
   adapters currently return explicit `503` integration-unavailable responses.
-- Family-to-senior linking and granular sharing permissions are not yet fully
-- implemented for all dashboard data paths.
-- Reminder creation is not yet fully persisted.
-- Some dashboard services still contain fallback/demo data.
+- Family dashboard access requires an accepted relationship, elderly sharing
+  consent, and the relevant relationship permission.
+- Reminder and occurrence state is persisted in MongoDB; production deployments
+  should still use a worker process or distributed scheduler for high availability.
+- Live dashboard and history workflows no longer return fabricated sample records.
 - External notification delivery channels such as SMS, WhatsApp, email, and
   push notifications are not configured.
 - The scheduler creates in-app notifications only; it cannot place calls or

@@ -39,12 +39,12 @@ def format_checkin_doc(doc: Dict[str, Any]) -> CheckinResponse:
         sessionType=doc.get("session_type", "daily_morning"),
         timestamp=doc.get("timestamp") or datetime.now(timezone.utc),
         status=doc.get("status", "completed"),
-        mood=doc.get("mood", "Peaceful"),
-        medicationConfirmed=doc.get("medication_confirmed", True),
+        mood=doc.get("mood") or "Not recorded",
+        medicationConfirmed=doc.get("medication_confirmed"),
         medicationDetails=doc.get("medication_details"),
         physicalComfort=doc.get("physical_comfort"),
         summary=doc.get(
-            "summary", "Gentle check-in completed. Senior reported feeling well."
+            "summary", "No summary recorded."
         ),
         dialogue=dialogue,
         followUps=doc.get("follow_ups", []),
@@ -108,14 +108,15 @@ def save_voice_checkin(
     ):
         alert_doc = {
             "_id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "type": "discomfort",
+            "elderly_user_id": user_id,
+            "category": "discomfort",
             "severity": "attention",
             "title": "Mild Physical Discomfort Logged",
             "message": f"Senior reported: '{payload.physical_comfort}' during morning check-in.",
-            "timestamp": now.strftime("%I:%M %p"),
-            "is_acknowledged": False,
+            "status": "new",
+            "source": "checkin",
             "created_at": now,
+            "updated_at": now,
         }
         try:
             alerts_col.insert_one(alert_doc)
@@ -199,47 +200,6 @@ def get_checkin_history(
     except Exception as e:
         logger.warning(f"Could not load checkin history: {e}")
 
-    # Fallback contextual starter history if DB is empty for demonstration
-    if not records:
-        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
-        records.append(
-            CheckinResponse(
-                id="sample-checkin-1",
-                userId=user_id,
-                sessionType="daily_morning",
-                timestamp=yesterday,
-                status="completed",
-                mood="Cheerful",
-                medicationConfirmed=True,
-                medicationDetails="Morning BP medication confirmed",
-                physicalComfort="Felt energized, walked in the garden",
-                summary="Wonderful morning conversation. Senior rested well, had idli breakfast, and confirmed their morning BP tablet.",
-                dialogue=[
-                    DialogueTurn(
-                        speaker="saanidhya",
-                        text="Good morning! Did you sleep peacefully?",
-                        timestamp="09:00 AM",
-                    ),
-                    DialogueTurn(
-                        speaker="user",
-                        text="Yes, very peacefully. The morning breeze is lovely.",
-                        timestamp="09:01 AM",
-                    ),
-                    DialogueTurn(
-                        speaker="saanidhya",
-                        text="I'm so glad to hear that. Did you take your morning tablet after food?",
-                        timestamp="09:01 AM",
-                    ),
-                    DialogueTurn(
-                        speaker="user",
-                        text="Yes, right after breakfast.",
-                        timestamp="09:02 AM",
-                    ),
-                ],
-                followUps=["Continue encouraging daily morning garden strolls"],
-            )
-        )
-
     return records
 
 
@@ -250,127 +210,77 @@ def get_family_dashboard_data(
     reminders_col: Collection,
     family_user_id: str,
     family_user_name: str,
+    elderly_user_id: str,
+    include_reminders: bool = False,
 ) -> FamilyDashboardResponse:
     """Assemble complete Family Dashboard overview."""
-    # Find connected senior or use representative senior profile
-    senior_name = "Ramesh Kumar"
-    try:
-        # Check if there is an elderly user registered
-        senior = users_col.find_one({"account_type": "elderly"})
-        if senior:
-            senior_name = senior.get("full_name", "Ramesh Kumar")
-    except Exception:
-        pass
+    senior = users_col.find_one({"_id": elderly_user_id, "account_type": "elderly"})
+    if not senior:
+        raise ValueError("Linked elderly account not found.")
+    senior_name = senior.get("full_name", "")
 
     # Recent checkins
     recent_checkins = []
     try:
-        cursor = checkins_col.find().sort("timestamp", -1).limit(5)
+        cursor = checkins_col.find({"user_id": elderly_user_id}).sort("timestamp", -1).limit(5)
         for doc in cursor:
             recent_checkins.append(format_checkin_doc(doc))
     except Exception:
         pass
 
-    if not recent_checkins:
-        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
-        recent_checkins.append(
-            CheckinResponse(
-                id="sample-fam-1",
-                userId="sample-senior",
-                sessionType="daily_morning",
-                timestamp=yesterday,
-                status="completed",
-                mood="Peaceful",
-                medicationConfirmed=True,
-                medicationDetails="Blood pressure tablet taken",
-                physicalComfort="Mild knee stiffness after walk",
-                summary="Morning check-in completed. Ramesh rested well, took medication with breakfast, and mentioned mild knee stiffness.",
-                dialogue=[],
-                followUps=["Check knee pain during evening chat"],
-            )
-        )
 
     # Alerts
     alerts = []
     try:
-        cursor = alerts_col.find().sort("created_at", -1).limit(6)
+        cursor = alerts_col.find({"elderly_user_id": elderly_user_id}).sort("created_at", -1).limit(6)
         for doc in cursor:
             alerts.append(
                 AlertItem(
                     id=str(doc.get("_id")),
-                    type=doc.get("type", "discomfort"),
+                    type=doc.get("category", doc.get("type", "observation")),
                     severity=doc.get("severity", "attention"),
                     title=doc.get("title", "Observation"),
                     message=doc.get("message", ""),
-                    timestamp=doc.get("timestamp", "Today"),
-                    isAcknowledged=doc.get("is_acknowledged", False),
+                    timestamp=str(doc.get("timestamp") or doc.get("created_at") or ""),
+                    isAcknowledged=doc.get("status") == "acknowledged" or doc.get("is_acknowledged", False),
                 )
             )
     except Exception:
         pass
 
-    if not alerts:
-        alerts = [
-            AlertItem(
-                id="alert-1",
-                type="discomfort",
-                severity="attention",
-                title="Repeated Knee Discomfort Mentioned",
-                message="Father mentioned knee stiffness during morning check-ins for 2 consecutive days after garden walking.",
-                timestamp="Today at 09:18 AM",
-                isAcknowledged=False,
-            ),
-            AlertItem(
-                id="alert-2",
-                type="medication",
-                severity="info",
-                title="Morning Medication Confirmed",
-                message="BP tablet confirmed taken on schedule right after breakfast.",
-                timestamp="Today at 09:16 AM",
-                isAcknowledged=True,
-            ),
-        ]
-
-    # Reminders
-    reminders = [
-        ReminderItem(
-            id="rem-1",
-            title="Amlodipine (BP Medication)",
-            time="09:00 AM",
-            frequency="Daily Morning",
-            status="Completed Today",
-        ),
-        ReminderItem(
-            id="rem-2",
-            title="Hydration & Warm Water",
-            time="03:00 PM",
-            frequency="Daily Afternoon",
-            status="Upcoming",
-        ),
-        ReminderItem(
-            id="rem-3",
-            title="Calcium & Vitamin D Supplement",
-            time="08:30 PM",
-            frequency="Daily Evening",
-            status="Scheduled",
-        ),
-    ]
+    reminders = []
+    if include_reminders:
+        try:
+            for doc in reminders_col.find({"user_id": elderly_user_id}).sort("next_occurrence", 1).limit(20):
+                reminders.append(
+                    ReminderItem(
+                        id=str(doc["_id"]),
+                        title=doc["title"],
+                        time=doc["reminder_time"].strftime("%I:%M %p"),
+                        frequency=doc["frequency"],
+                        status=doc.get("status", "scheduled"),
+                    )
+                )
+        except Exception:
+            logger.warning("Could not load linked senior reminders", exc_info=True)
 
     senior_profile = SeniorProfile(
         name=senior_name,
         relationship="Father",
-        age=74,
-        preferredLanguage="Kannada & English",
-        lastCheckinTime="Today at 09:15 AM",
-        todayStatus="Completed",
+        age=0,
+        preferredLanguage=senior.get("preferred_language") or "Not provided",
+        lastCheckinTime=(
+            recent_checkins[0].timestamp.isoformat() if recent_checkins else "No check-ins yet"
+        ),
+        todayStatus="Completed" if recent_checkins else "Pending",
     )
 
     wellness_overview = {
-        "adherenceRate": "100%",
-        "checkinStreak": "7 Days",
-        "currentMood": "Peaceful & Reassured",
-        "medicationCompliance": "On Track (7/7 days)",
-        "keyObservation": "Mild knee discomfort noted during cool mornings. Rest and warm compress recommended.",
+        "adherenceRate": None,
+        "checkinStreak": None,
+        "currentMood": recent_checkins[0].mood if recent_checkins else None,
+        "medicationCompliance": None,
+        "keyObservation": recent_checkins[0].summary if recent_checkins else None,
     }
 
     return FamilyDashboardResponse(

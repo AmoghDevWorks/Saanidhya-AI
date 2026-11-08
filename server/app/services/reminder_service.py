@@ -22,6 +22,8 @@ def next_occurrence(
     end_date: Optional[date] = None,
 ) -> Optional[datetime]:
     zone = validate_timezone(timezone_name)
+    if end_date and end_date < start_date:
+        raise HTTPException(status_code=422, detail="End date cannot be before start date.")
     current = (now or datetime.now(timezone.utc)).astimezone(zone)
     candidate_date = max(start_date, current.date())
     if frequency == "daily":

@@ -73,6 +73,21 @@ async def update_reminder(reminder_id: str, payload: ReminderUpdate, current_use
     changes = payload.model_dump(exclude_unset=True)
     timezone_name = changes.get("timezone", item["timezone"])
     validate_timezone(timezone_name)
+    if "end_date" in changes and changes["end_date"] and changes["end_date"] < changes.get("start_date", item["start_date"]):
+        raise HTTPException(status_code=422, detail="End date cannot be before start date.")
+    scheduling_changed = any(
+        field in changes
+        for field in ("reminder_time", "frequency", "start_date", "end_date", "timezone")
+    )
+    if scheduling_changed:
+        changes["next_occurrence"] = next_occurrence(
+            changes.get("start_date", item["start_date"]),
+            changes.get("reminder_time", item["reminder_time"]),
+            changes.get("frequency", item["frequency"]),
+            timezone_name,
+            datetime.now(timezone.utc),
+            changes.get("end_date", item.get("end_date")),
+        )
     reminders.update_one({"_id": reminder_id, "user_id": current_user.id}, {"$set": {**changes, "updated_at": datetime.now(timezone.utc)}})
     return reminder_response(reminders.find_one({"_id": reminder_id, "user_id": current_user.id}))
 
@@ -82,6 +97,43 @@ async def delete_reminder(reminder_id: str, current_user: UserResponse = Depends
     result = reminders.update_one({"_id": reminder_id, "user_id": current_user.id}, {"$set": {"status": "cancelled", "updated_at": datetime.now(timezone.utc)}})
     if not result.matched_count:
         raise HTTPException(status_code=404, detail="Reminder not found.")
+
+
+@router.post("/api/reminders/{reminder_id}/pause", response_model=ReminderResponse)
+async def pause_reminder(
+    reminder_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+    reminders: Collection = Depends(get_reminders_collection),
+):
+    result = reminders.find_one_and_update(
+        {"_id": reminder_id, "user_id": current_user.id, "status": {"$ne": "cancelled"}},
+        {"$set": {"status": "paused", "updated_at": datetime.now(timezone.utc)}},
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Reminder not found.")
+    return reminder_response({**result, "status": "paused"})
+
+
+@router.post("/api/reminders/{reminder_id}/resume", response_model=ReminderResponse)
+async def resume_reminder(
+    reminder_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+    reminders: Collection = Depends(get_reminders_collection),
+):
+    item = reminders.find_one({"_id": reminder_id, "user_id": current_user.id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Reminder not found.")
+    if item.get("status") == "cancelled":
+        raise HTTPException(status_code=409, detail="Cancelled reminders cannot be resumed.")
+    following = next_occurrence(
+        item["start_date"], item["reminder_time"], item["frequency"],
+        item["timezone"], datetime.now(timezone.utc), item.get("end_date")
+    )
+    reminders.update_one(
+        {"_id": reminder_id, "user_id": current_user.id},
+        {"$set": {"status": "scheduled", "next_occurrence": following, "updated_at": datetime.now(timezone.utc)}},
+    )
+    return reminder_response({**item, "status": "scheduled", "next_occurrence": following})
 
 
 async def action_occurrence(reminder_id, action, payload, current_user, reminders, occurrences):
@@ -102,6 +154,15 @@ async def action_occurrence(reminder_id, action, payload, current_user, reminder
     if payload.note:
         changes["note"] = payload.note
     occurrences.update_one({"_id": occurrence_id, "user_id": current_user.id}, {"$set": changes})
+    if action in {"completed", "skipped"}:
+        following = next_occurrence(
+            reminder["start_date"], reminder["reminder_time"], reminder["frequency"],
+            reminder["timezone"], now, reminder.get("end_date")
+        )
+        reminders.update_one(
+            {"_id": reminder_id, "user_id": current_user.id},
+            {"$set": {"next_occurrence": following, "updated_at": now}},
+        )
     return occurrences.find_one({"_id": occurrence_id, "user_id": current_user.id})
 
 

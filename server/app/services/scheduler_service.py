@@ -1,7 +1,9 @@
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from app.database import (
     get_checkin_executions_collection,
@@ -21,29 +23,43 @@ def process_due_reminders() -> int:
     occurrences = get_reminder_occurrences_collection()
     notifications = get_notifications_collection()
     processed = 0
-    for reminder in reminders.find(
-        {"status": "scheduled", "next_occurrence": {"$lte": now, "$ne": None}}
-    ):
+    while True:
+        reminder = reminders.find_one_and_update(
+            {
+                "status": "scheduled",
+                "next_occurrence": {"$lte": now, "$ne": None},
+                "$or": [
+                    {"processing_until": {"$exists": False}},
+                    {"processing_until": {"$lt": now}},
+                ],
+            },
+            {"$set": {"processing_until": now.replace(microsecond=0) + timedelta(minutes=5)}},
+            return_document=ReturnDocument.AFTER,
+        )
+        if not reminder:
+            break
         scheduled_for = reminder["next_occurrence"]
         occurrence = occurrence_document(reminder, scheduled_for)
         try:
             occurrences.insert_one(occurrence)
-        except Exception:
+        except DuplicateKeyError:
+            reminders.update_one({"_id": reminder["_id"]}, {"$unset": {"processing_until": ""}})
             continue
-        notifications.insert_one(
-            {
-                "_id": occurrence["_id"],
-                "recipient_user_id": reminder["user_id"],
-                "category": "reminder",
-                "severity": "info",
-                "title": reminder["title"],
-                "message": reminder.get(
-                    "description", "Your scheduled reminder is due."
-                ),
-                "read": False,
-                "created_at": now,
-            }
-        )
+        try:
+            notifications.insert_one(
+                {
+                    "_id": occurrence["_id"],
+                    "recipient_user_id": reminder["user_id"],
+                    "category": "reminder",
+                    "severity": "info",
+                    "title": reminder["title"],
+                    "message": reminder.get("description", "Your scheduled reminder is due."),
+                    "read": False,
+                    "created_at": now,
+                }
+            )
+        except DuplicateKeyError:
+            pass
         following = next_occurrence(
             reminder["start_date"],
             reminder["reminder_time"],
@@ -56,6 +72,7 @@ def process_due_reminders() -> int:
             {"_id": reminder["_id"]},
             {"$set": {"next_occurrence": following, "updated_at": now}},
         )
+        reminders.update_one({"_id": reminder["_id"]}, {"$unset": {"processing_until": ""}})
         processed += 1
     return processed
 

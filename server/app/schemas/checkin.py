@@ -24,18 +24,18 @@ class SaveCheckinRequest(BaseModel):
     dialogue: List[DialogueTurn] = Field(
         ..., description="Complete conversational turns"
     )
-    mood: Optional[str] = Field(default="Peaceful", description="Observed mood")
+    mood: Optional[str] = Field(default=None, description="Observed mood")
     medication_confirmed: Optional[bool] = Field(
-        default=True,
+        default=None,
         alias="medicationConfirmed",
         description="Whether medication intake was confirmed",
     )
     medication_details: Optional[str] = Field(
-        default="Morning BP tablet confirmed after breakfast",
+        default=None,
         alias="medicationDetails",
     )
     physical_comfort: Optional[str] = Field(
-        default="Comfortable; mild knee stiffness noted",
+        default=None,
         alias="physicalComfort",
     )
     summary: Optional[str] = Field(

@@ -126,13 +126,11 @@ Implemented in `app/routes/family.py`.
 This section is intended to keep caregivers informed about meaningful wellness
 updates without exposing private memories by default.
 
-Current limitations:
-
-- The routes authenticate users but do not yet enforce a family-only role.
-- Family-to-senior relationships and granular sharing permissions are not yet modeled.
-- Alert acknowledgement is not yet scoped to a verified family relationship.
-- Reminder creation currently returns a response but does not fully persist the reminder.
-- Dashboard fallback/demo data remains in the service and should be removed before production.
+The dashboard requires an accepted family relationship, active elderly
+family-sharing consent, and the `wellness_summaries` permission. Alert
+acknowledgement additionally requires `notifications_enabled`. The legacy
+`POST /api/family/reminders` endpoint no longer fabricates a reminder; callers
+must use the persistent reminder API.
 
 ## 7. Family Relationships, Consent, Alerts, and Notifications
 
@@ -143,7 +141,7 @@ alert services.
 
 | Method | Route | Auth | Serves |
 |---|---|---|---|
-| POST | `/api/family/invitations` | Elderly user | Creates a seven-day invitation for an existing family account. |
+| POST | `/api/family/invitations` | Elderly user | Creates a seven-day invitation for an existing family account; only a SHA-256 token hash is persisted. |
 | POST | `/api/family/invitations/accept` | Family user | Accepts a valid invitation token and creates an accepted relationship. |
 | GET | `/api/family/relationships` | Required | Lists accepted relationships involving the current user. |
 | DELETE | `/api/family/relationships/{relationship_id}` | Related user | Revokes an accepted relationship. |
@@ -188,7 +186,6 @@ Configured in `app/database.py`.
 | `users` | Accounts, roles, credentials, and memory consent. |
 | `checkins` | Check-in sessions, dialogue, summaries, and wellness observations. |
 | `alerts` | Caregiver-facing wellness alerts. |
-| `reminders` | Intended storage for caregiver reminders. |
 | `memories` | Private, user-scoped conversational memories. |
 | `reminders` | User-created medication, routine, event, and follow-up reminders. |
 | `reminder_occurrences` | Idempotent scheduled reminder executions and completion state. |
@@ -217,6 +214,8 @@ Implemented in `app/routes/reminders.py`, with scheduling logic in
 | POST | `/api/reminders/{reminder_id}/acknowledge` | Required | Records that the current occurrence was seen. |
 | POST | `/api/reminders/{reminder_id}/complete` | Required | Records user completion separately from acknowledgement. |
 | POST | `/api/reminders/{reminder_id}/skip` | Required | Records that the current occurrence was skipped. |
+| POST | `/api/reminders/{reminder_id}/pause` | Required | Pauses an active reminder without deleting it. |
+| POST | `/api/reminders/{reminder_id}/resume` | Required | Resumes a paused reminder and recalculates its next occurrence. |
 
 Supported categories are `medication`, `routine`, `event`, and `follow_up`.
 Supported frequencies are `once`, `daily`, and `weekly`. Reminder times are
@@ -234,7 +233,9 @@ Medication reminders never prove that medication was taken.
 | GET | `/api/schedules/checkins/history` | Required | Lists scheduled check-in execution history. |
 
 The backend scheduler polls due reminders every 60 seconds after application
-startup. It creates in-app notifications and idempotent occurrence records.
+startup. It atomically claims due reminders with a short processing lease,
+creates in-app notifications and idempotent occurrence records, and recovers
+leases after a worker interruption.
 It does not place phone calls or start microphone recording without user
 interaction and browser permission.
 
@@ -251,7 +252,7 @@ interaction and browser permission.
 | Memory consent | Implemented |
 | Memory user isolation | Implemented |
 | Memory dashboard | Implemented |
-| Family role enforcement | Needs strengthening |
-| Reminder persistence | Not fully implemented |
-| Family-to-senior authorization model | Not yet implemented |
-| Demo fallback data removal | Recommended before production |
+| Family role enforcement | Implemented on family and notification routes |
+| Reminder persistence | Implemented with MongoDB reminder and occurrence documents |
+| Family-to-senior authorization model | Implemented with hashed invitations, relationships, permissions, and consent |
+| Demo fallback data removal | Removed from live dashboard/history workflows |

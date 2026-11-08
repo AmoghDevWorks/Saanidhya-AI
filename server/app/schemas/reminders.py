@@ -33,10 +33,25 @@ class ReminderUpdate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=500)
     reminder_time: Optional[time] = None
     frequency: Optional[str] = Field(default=None, max_length=30)
+    start_date: Optional[date] = None
     end_date: Optional[date] = None
     timezone: Optional[str] = None
     notes: Optional[str] = Field(default=None, max_length=500)
     status: Optional[str] = None
+
+    @field_validator("frequency")
+    @classmethod
+    def valid_frequency(cls, value):
+        if value is not None and value not in {"once", "daily", "weekly"}:
+            raise ValueError("Frequency must be once, daily, or weekly.")
+        return value
+
+    @field_validator("status")
+    @classmethod
+    def valid_status(cls, value):
+        if value is not None and value not in REMINDER_STATUSES:
+            raise ValueError("Unsupported reminder status.")
+        return value
 
 
 class ReminderResponse(BaseModel):

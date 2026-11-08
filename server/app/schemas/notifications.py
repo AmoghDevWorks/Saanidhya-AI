@@ -32,6 +32,7 @@ class SharingPreferences(BaseModel):
     checkin_updates: bool = True
     discomfort_updates: bool = False
     assistance_requests: bool = True
+    reminders: bool = True
 
 
 class ConsentResponse(BaseModel):

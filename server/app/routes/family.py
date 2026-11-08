@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, Depends, status
 from pymongo.collection import Collection
@@ -7,6 +8,8 @@ from app.database import (
     get_checkins_collection,
     get_alerts_collection,
     get_reminders_collection,
+    get_relationships_collection,
+    get_users_collection,
 )
 from app.routes.auth import get_current_user
 from app.schemas.auth import UserResponse
@@ -18,6 +21,7 @@ from app.schemas.family import (
 )
 from app.services.memory_service import get_family_dashboard_data
 from fastapi import HTTPException
+from app.services.family_authorization import get_shared_senior
 
 router = APIRouter(prefix="", tags=["Family"])
 
@@ -38,9 +42,13 @@ async def get_family_dashboard(
     checkins_col: Collection = Depends(get_checkins_collection),
     alerts_col: Collection = Depends(get_alerts_collection),
     reminders_col: Collection = Depends(get_reminders_collection),
+    relationships_col: Collection = Depends(get_relationships_collection),
 ):
     """Retrieve connected senior's wellness overview, alerts, and recent check-ins."""
     require_family(current_user)
+    relationship, senior = get_shared_senior(
+        relationships_col, users_col, current_user.id, "wellness_summaries"
+    )
     return get_family_dashboard_data(
         users_col,
         checkins_col,
@@ -48,6 +56,11 @@ async def get_family_dashboard(
         reminders_col,
         current_user.id,
         current_user.full_name,
+        str(senior["_id"]),
+        include_reminders=(
+            relationship.get("permissions", {}).get("view_reminders", False)
+            and senior.get("family_preferences", {}).get("reminders", False)
+        ),
     )
 
 
@@ -59,15 +72,20 @@ async def acknowledge_alert(
     alert_id: str,
     current_user: UserResponse = Depends(get_current_user),
     alerts_col: Collection = Depends(get_alerts_collection),
+    relationships_col: Collection = Depends(get_relationships_collection),
+    users_col: Collection = Depends(get_users_collection),
 ):
     """Mark an alert as acknowledged by the caregiver."""
     require_family(current_user)
-    try:
-        alerts_col.update_one(
-            {"_id": alert_id}, {"$set": {"is_acknowledged": True}}
-        )
-    except Exception:
-        pass
+    _, senior = get_shared_senior(
+        relationships_col, users_col, current_user.id, "notifications_enabled"
+    )
+    result = alerts_col.update_one(
+        {"_id": alert_id, "elderly_user_id": str(senior["_id"])},
+        {"$set": {"status": "acknowledged", "updated_at": datetime.now(timezone.utc)}},
+    )
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Alert not found.")
     return {"success": True, "message": "Alert acknowledged."}
 
 
@@ -80,17 +98,15 @@ async def create_reminder(
     payload: CreateReminderRequest,
     current_user: UserResponse = Depends(get_current_user),
     reminders_col: Collection = Depends(get_reminders_collection),
+    relationships_col: Collection = Depends(get_relationships_collection),
+    users_col: Collection = Depends(get_users_collection),
 ):
     """Add a scheduled reminder for the senior."""
     require_family(current_user)
-    return {
-        "success": True,
-        "message": f"Reminder '{payload.title}' scheduled for {payload.time}.",
-        "reminder": {
-            "id": "new-rem-1",
-            "title": payload.title,
-            "time": payload.time,
-            "frequency": payload.frequency,
-            "status": "Scheduled",
-        },
-    }
+    get_shared_senior(
+        relationships_col, users_col, current_user.id, "manage_reminders"
+    )
+    raise HTTPException(
+        status_code=410,
+        detail="Use /api/reminders to create reminders; caregiver reminder creation requires the linked senior ID and is not enabled on this legacy endpoint.",
+    )

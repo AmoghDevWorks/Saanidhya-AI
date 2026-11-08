@@ -127,17 +127,32 @@ def init_indexes():
             unique=True,
             background=True,
         )
+        relationships.create_index(
+            [("elderly_user_id", ASCENDING), ("status", ASCENDING)], background=True
+        )
         get_invitations_collection().create_index(
-            [("token", ASCENDING)], unique=True, background=True
+            [("token_hash", ASCENDING)], unique=True, background=True
+        )
+        get_invitations_collection().create_index(
+            [("family_user_id", ASCENDING), ("status", ASCENDING), ("expires_at", ASCENDING)],
+            background=True,
         )
         get_notifications_collection().create_index(
             [("recipient_user_id", ASCENDING), ("read", ASCENDING)],
             background=True,
         )
         get_reminder_occurrences_collection().create_index(
-            [("user_id", ASCENDING), ("scheduled_for", ASCENDING)],
+            [("reminder_id", ASCENDING), ("scheduled_for", ASCENDING)],
             unique=True,
             background=True,
+        )
+        reminders = get_reminders_collection()
+        reminders.create_index(
+            [("user_id", ASCENDING), ("status", ASCENDING), ("next_occurrence", ASCENDING)],
+            background=True,
+        )
+        get_alerts_collection().create_index(
+            [("elderly_user_id", ASCENDING), ("status", ASCENDING)], background=True
         )
         get_checkin_schedules_collection().create_index(
             [("user_id", ASCENDING), ("enabled", ASCENDING)], background=True

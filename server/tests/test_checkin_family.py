@@ -150,25 +150,20 @@ def test_get_history(auth_client):
     assert isinstance(res.json(), list)
 
 
-def test_family_dashboard(auth_client):
-    """Verify family dashboard endpoint returns caregiver overview."""
+def test_family_dashboard_requires_family_relationship(auth_client):
+    """An elderly account cannot access the caregiver dashboard."""
     res = auth_client.get("/api/family/dashboard")
-    assert res.status_code == 200
-    data = res.json()
-    assert "seniorProfile" in data
-    assert "wellnessOverview" in data
-    assert "alerts" in data
+    assert res.status_code == 403
 
 
-def test_family_acknowledge_alert(auth_client):
-    """Verify caregiver can acknowledge an alert."""
+def test_family_acknowledge_alert_requires_family_relationship(auth_client):
+    """An elderly account cannot acknowledge caregiver alerts."""
     res = auth_client.post("/api/family/alerts/test-alert-1/acknowledge")
-    assert res.status_code == 200
-    assert res.json()["success"] is True
+    assert res.status_code == 403
 
 
-def test_family_create_reminder(auth_client):
-    """Verify caregiver can create a reminder."""
+def test_family_create_reminder_requires_family_relationship(auth_client):
+    """Legacy caregiver reminder creation cannot bypass relationship checks."""
     res = auth_client.post(
         "/api/family/reminders",
         json={
@@ -177,5 +172,4 @@ def test_family_create_reminder(auth_client):
             "frequency": "Daily",
         },
     )
-    assert res.status_code == 201
-    assert res.json()["success"] is True
+    assert res.status_code == 403

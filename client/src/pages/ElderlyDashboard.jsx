@@ -26,10 +26,10 @@ export const ElderlyDashboard = () => {
 
   const [summaryData, setSummaryData] = useState({
     hasCheckedInToday: false,
-    mood: 'Peaceful',
-    medicationStatus: 'Morning BP tablet confirmed',
-    wellnessNotes: 'Ready for today’s morning conversation.',
-    followUp: 'Check knee comfort during evening conversation.',
+    mood: 'Not available',
+    medicationStatus: 'Not available',
+    wellnessNotes: 'No check-in data is available yet.',
+    followUp: null,
     recentCheckins: [],
   });
   const [contactFamilyOpen, setContactFamilyOpen] = useState(false);
@@ -399,27 +399,9 @@ export const ElderlyDashboard = () => {
               </button>
             </div>
             <div className="space-y-2.5">
-              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-emerald-800">09:00 AM &bull; Morning BP Tablet</p>
-                  <p className="text-xs text-emerald-600">Amlodipine 5mg with breakfast</p>
-                </div>
-                <span className="text-xs font-bold text-emerald-700 bg-white px-2 py-0.5 rounded-full">Completed</span>
-              </div>
-              <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-blue-900">03:00 PM &bull; Afternoon Hydration</p>
-                  <p className="text-xs text-blue-700">Glass of warm water &amp; rest</p>
-                </div>
-                <span className="text-xs font-bold text-blue-700 bg-white px-2 py-0.5 rounded-full">Upcoming</span>
-              </div>
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-slate-800">08:30 PM &bull; Calcium Supplement</p>
-                  <p className="text-xs text-slate-600">After dinner with milk</p>
-                </div>
-                <span className="text-xs font-medium text-slate-500 bg-white px-2 py-0.5 rounded-full">Scheduled</span>
-              </div>
+              <p className="rounded-2xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
+                Reminders are managed from the reminders page and will appear here when configured.
+              </p>
             </div>
             <button
               onClick={() => setRemindersOpen(false)}

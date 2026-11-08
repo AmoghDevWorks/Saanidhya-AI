@@ -26,6 +26,7 @@ from app.schemas.notifications import (
     SharingPreferences,
 )
 from app.services.family_link_service import accept_invitation, create_invitation
+from app.services.family_authorization import linked_senior_ids
 
 router = APIRouter(tags=["Notifications and Family Access"])
 
@@ -96,6 +97,7 @@ async def invite_family(
     current_user: UserResponse = Depends(get_current_user),
     users: Collection = Depends(get_users_collection),
     invitations: Collection = Depends(get_invitations_collection),
+    relationships: Collection = Depends(get_relationships_collection),
 ):
     return create_invitation(
         current_user,
@@ -103,6 +105,7 @@ async def invite_family(
         payload.relationship_type,
         users,
         invitations,
+        relationships,
     )
 
 
@@ -206,6 +209,7 @@ async def update_family_preferences(
 async def list_notifications(
     current_user: UserResponse = Depends(get_current_user),
     notifications: Collection = Depends(get_notifications_collection),
+    users: Collection = Depends(get_users_collection),
 ):
     require_family(current_user)
     items = list(
@@ -263,11 +267,12 @@ async def list_alerts(
     relationships: Collection = Depends(get_relationships_collection),
     alerts: Collection = Depends(get_alerts_collection),
     notifications: Collection = Depends(get_notifications_collection),
+    users: Collection = Depends(get_users_collection),
 ):
     require_family(current_user)
-    elderly_ids = NotificationRepository(
-        relationships, alerts, notifications
-    ).linked_elderly_ids(current_user.id)
+    elderly_ids = linked_senior_ids(
+        relationships, users, current_user.id, "notifications_enabled"
+    )
     return [alert_response(item) for item in alerts.find(
         {"elderly_user_id": {"$in": elderly_ids}}
     ).sort("created_at", -1).limit(50)]
@@ -280,11 +285,12 @@ async def get_alert(
     relationships: Collection = Depends(get_relationships_collection),
     alerts: Collection = Depends(get_alerts_collection),
     notifications: Collection = Depends(get_notifications_collection),
+    users: Collection = Depends(get_users_collection),
 ):
     require_family(current_user)
-    elderly_ids = NotificationRepository(
-        relationships, alerts, notifications
-    ).linked_elderly_ids(current_user.id)
+    elderly_ids = linked_senior_ids(
+        relationships, users, current_user.id, "notifications_enabled"
+    )
     alert = alerts.find_one({"_id": alert_id, "elderly_user_id": {"$in": elderly_ids}})
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found.")
@@ -299,11 +305,12 @@ async def update_alert_status(
     relationships: Collection = Depends(get_relationships_collection),
     alerts: Collection = Depends(get_alerts_collection),
     notifications: Collection = Depends(get_notifications_collection),
+    users: Collection = Depends(get_users_collection),
 ):
     require_family(current_user)
-    elderly_ids = NotificationRepository(
-        relationships, alerts, notifications
-    ).linked_elderly_ids(current_user.id)
+    elderly_ids = linked_senior_ids(
+        relationships, users, current_user.id, "notifications_enabled"
+    )
     changes = {"status": payload.status}
     if payload.resolution_note is not None:
         changes["resolution_note"] = payload.resolution_note

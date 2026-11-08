@@ -112,7 +112,7 @@ export const FamilyDashboard = () => {
                 <ShieldCheck size={13} /> Family Care Circle
               </span>
               <span className="text-xs font-semibold text-slate-500">
-                &bull; Connected to Father
+                &bull; Connected senior
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-display font-bold text-slate-900 tracking-tight">
@@ -151,14 +151,14 @@ export const FamilyDashboard = () => {
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-xl font-bold text-slate-900">
-                    {dashboardData?.seniorProfile?.name || 'Ramesh Kumar'}
+                    {dashboardData?.seniorProfile?.name || 'No linked senior'}
                   </h2>
                   <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                    {dashboardData?.seniorProfile?.relationship || 'Father'} (74y)
+                    {dashboardData?.seniorProfile?.relationship || 'Relationship unavailable'}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
-                  Languages: Kannada &amp; English &bull; Location: Bengaluru, India
+                  Languages: {dashboardData?.seniorProfile?.preferredLanguage || 'Not provided'}
                 </p>
               </div>
             </div>
@@ -169,12 +169,12 @@ export const FamilyDashboard = () => {
                   Last Morning Check-in
                 </p>
                 <p className="text-sm font-bold text-slate-900 mt-0.5">
-                  {dashboardData?.seniorProfile?.lastCheckinTime || 'Today at 09:15 AM'}
+                  {dashboardData?.seniorProfile?.lastCheckinTime || 'No check-ins yet'}
                 </p>
               </div>
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
                 <CheckCircle2 size={15} className="text-emerald-600" />
-                Completed Today
+                {dashboardData?.seniorProfile?.todayStatus || 'No data'}
               </span>
             </div>
           </div>
@@ -190,8 +190,8 @@ export const FamilyDashboard = () => {
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Check-in Frequency
             </p>
-            <p className="text-2xl font-display font-bold text-slate-900">100%</p>
-            <p className="text-xs text-slate-500">7-Day consecutive check-in streak</p>
+            <p className="text-2xl font-display font-bold text-slate-900">{dashboardData?.wellnessOverview?.adherenceRate || 'No data'}</p>
+            <p className="text-xs text-slate-500">Based on linked senior check-ins</p>
           </div>
 
           {/* Observed Mood */}
@@ -202,8 +202,8 @@ export const FamilyDashboard = () => {
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Recent Mood
             </p>
-            <p className="text-2xl font-display font-bold text-slate-900">Peaceful</p>
-            <p className="text-xs text-slate-500">Calm &amp; receptive during check-ins</p>
+            <p className="text-2xl font-display font-bold text-slate-900">{dashboardData?.wellnessOverview?.currentMood || 'No data'}</p>
+            <p className="text-xs text-slate-500">Latest recorded check-in mood</p>
           </div>
 
           {/* Medication Compliance */}
@@ -214,8 +214,8 @@ export const FamilyDashboard = () => {
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Medication Status
             </p>
-            <p className="text-2xl font-display font-bold text-slate-900">On Track</p>
-            <p className="text-xs text-emerald-700 font-semibold">Morning BP tablet confirmed</p>
+            <p className="text-2xl font-display font-bold text-slate-900">{dashboardData?.wellnessOverview?.medicationCompliance || 'No data'}</p>
+            <p className="text-xs text-emerald-700 font-semibold">Recorded medication information</p>
           </div>
 
           {/* Caregiver Assurance */}
@@ -226,8 +226,8 @@ export const FamilyDashboard = () => {
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Peace of Mind
             </p>
-            <p className="text-2xl font-display font-bold text-slate-900">High</p>
-            <p className="text-xs text-slate-500">No emergency escalations</p>
+            <p className="text-2xl font-display font-bold text-slate-900">No data</p>
+            <p className="text-xs text-slate-500">This is not a medical assessment</p>
           </div>
         </section>
 
@@ -329,38 +329,23 @@ export const FamilyDashboard = () => {
           </div>
 
           <div className="space-y-4">
-            <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-slate-200/80 space-y-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-bold text-slate-700 bg-white px-3 py-1 rounded-lg border border-slate-200">
-                  Today at 09:15 AM (Morning Check-in)
-                </span>
-                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  Medication Confirmed
-                </span>
+            {dashboardData?.recentCheckins?.length ? dashboardData.recentCheckins.map((checkin) => (
+              <div key={checkin.id} className="p-5 rounded-2xl bg-white border border-slate-200/80 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-700 bg-slate-50 px-3 py-1 rounded-lg border border-slate-200">
+                    {new Date(checkin.timestamp).toLocaleString()}
+                  </span>
+                  <span className="text-xs font-bold text-slate-700 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200">
+                    {checkin.medicationConfirmed === true ? 'Medication Confirmed' : 'Medication not recorded'}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-700 leading-relaxed italic">&ldquo;{checkin.summary}&rdquo;</p>
+                <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-slate-500">
+                  <span className="bg-white px-2 py-0.5 rounded border border-slate-200 font-medium">Mood: {checkin.mood}</span>
+                  {checkin.physicalComfort && <span className="bg-white px-2 py-0.5 rounded border border-slate-200 font-medium">{checkin.physicalComfort}</span>}
+                </div>
               </div>
-              <p className="text-sm text-slate-700 leading-relaxed italic">
-                &ldquo;Ramesh had good rest, took morning BP pill after idli breakfast, reported mild knee ache after morning walk in the garden. Saanidhya advised warm compress.&rdquo;
-              </p>
-              <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-slate-500">
-                <span className="bg-white px-2 py-0.5 rounded border border-slate-200 font-medium">Mood: Peaceful</span>
-                <span className="bg-white px-2 py-0.5 rounded border border-slate-200 font-medium">BP: Taken</span>
-                <span className="bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-200 font-medium">Follow-up: Knee comfort</span>
-              </div>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-white border border-slate-200/80 space-y-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-bold text-slate-700 bg-slate-50 px-3 py-1 rounded-lg border border-slate-200">
-                  Yesterday at 09:12 AM
-                </span>
-                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  Completed
-                </span>
-              </div>
-              <p className="text-sm text-slate-700 leading-relaxed italic">
-                &ldquo;Senior was cheerful, confirmed taking evening calcium pill the night before, enjoyed the morning breeze, and planned to read devotional books.&rdquo;
-              </p>
-            </div>
+            )) : <p className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No check-ins recorded yet.</p>}
           </div>
         </section>
       </main>
