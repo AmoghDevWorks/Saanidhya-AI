@@ -1,7 +1,80 @@
-# Saanidhya AI Backend Routes
+I’ll map the FastAPI registration points and every route module, then summarize each section’s purpose, authentication, and current behavior.
 
-The backend is a FastAPI application mounted from `app.main`. Protected routes
-require an `Authorization: Bearer <JWT>` header unless noted otherwise.
+Read , lines 1 to 220
+Completed with input: {
+  "path": "E:\\Gnani AI\\server\\app\\main.py",
+  "view_range": [
+    1,
+    220
+  ]
+}
+
+Read , lines 1 to 280
+Completed with input: {
+  "path": "E:\\Gnani AI\\server\\app\\routes\\auth.py",
+  "view_range": [
+    1,
+    280
+  ]
+}
+
+Read , lines 1 to 360
+Completed with input: {
+  "path": "E:\\Gnani AI\\server\\app\\routes\\checkin.py",
+  "view_range": [
+    1,
+    360
+  ]
+}
+
+Read , lines 1 to 360
+Completed with input: {
+  "path": "E:\\Gnani AI\\server\\app\\routes\\family.py",
+  "view_range": [
+    1,
+    360
+  ]
+}
+
+Read , lines 1 to 280
+Completed with input: {
+  "path": "E:\\Gnani AI\\server\\app\\routes\\voice.py",
+  "view_range": [
+    1,
+    280
+  ]
+}
+
+Read , lines 1 to 320
+Completed with input: {
+  "path": "E:\\Gnani AI\\server\\app\\routes\\memory.py",
+  "view_range": [
+    1,
+    320
+  ]
+}
+
+Read , lines 1 to 180
+Completed with input: {
+  "path": "E:\\Gnani AI\\server\\app\\config.py",
+  "view_range": [
+    1,
+    180
+  ]
+}
+
+Read , lines 1 to 240
+Completed with input: {
+  "path": "E:\\Gnani AI\\server\\app\\database.py",
+  "view_range": [
+    1,
+    240
+  ]
+}
+
+# Backend Route Analysis
+
+The FastAPI application is registered in `main.py`. It exposes health endpoints plus five functional API sections.
 
 ## 1. Health and Application Status
 
@@ -243,12 +316,16 @@ interaction and browser permission.
 
 | Status | Meaning |
 |---|---|
-| `400` | Invalid or empty request data. |
-| `401` | Missing, expired, or invalid JWT. |
-| `403` | Authenticated account is inactive or access is forbidden. |
-| `404` | Requested session or memory does not exist for the authenticated user. |
-| `502` | Upstream provider request failed unexpectedly. |
-| `503` | Required provider integration or external service is unavailable. |
-
-See the automatically generated API documentation at `/docs` for request and
-response schemas.
+| Health endpoints | Implemented |
+| JWT authentication | Implemented |
+| Elderly check-ins | Implemented |
+| Voice route contracts | Implemented |
+| Actual Gnani provider calls | Pending official API documentation |
+| Memory storage | Implemented |
+| Memory consent | Implemented |
+| Memory user isolation | Implemented |
+| Memory dashboard | Implemented |
+| Family role enforcement | Needs strengthening |
+| Reminder persistence | Not fully implemented |
+| Family-to-senior authorization model | Not yet implemented |
+| Demo fallback data removal | Recommended before production |
