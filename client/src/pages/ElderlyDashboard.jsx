@@ -274,28 +274,6 @@ export const ElderlyDashboard = () => {
               View all conversations <ArrowRight size={16} />
             </Link>
           </div>
-
-          <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF8F5] border border-slate-200/80 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs font-bold text-slate-700 bg-white px-3 py-1 rounded-lg border border-slate-200">
-                Yesterday at 09:15 AM
-              </span>
-              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                Medication Confirmed
-              </span>
-            </div>
-            <p className="text-sm text-slate-700 leading-relaxed italic">
-              &ldquo;Namaskara! Senior rested peacefully, took morning blood pressure medicine with breakfast, and mentioned light walking in the garden. Recommended warm water compress for mild knee stiffness.&rdquo;
-            </p>
-            {summaryData.followUp && (
-              <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-100 text-xs text-blue-900 flex items-center gap-2">
-                <Volume2 size={15} className="text-blue-600 flex-shrink-0" />
-                <span>
-                  <strong>Follow-up Reminder:</strong> {summaryData.followUp}
-                </span>
-              </div>
-            )}
-          </div>
         </section>
 
         {/* ================= 5. QUICK ACTIONS ================= */}

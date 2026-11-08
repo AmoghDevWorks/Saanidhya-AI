@@ -43,10 +43,10 @@ Implemented in `app/routes/checkin.py`.
 |---|---|---|---|
 | GET | `/api/checkin/today` | Required | Today's check-in status and wellness summary. |
 | POST | `/api/checkin/save` | Required | Legacy save endpoint for a completed dialogue and wellness markers; retained for compatibility. |
-| GET | `/api/checkin/history` | Required | Previous check-ins for the authenticated user. |
-| POST | `/api/checkin/start` | Required | Creates an active check-in session and loads relevant memories when consent is enabled. |
+| GET | `/api/checkin/history` | Required | Previous check-ins for the authenticated user, including Gemini summaries and persisted conversation messages. |
+| POST | `/api/checkin/start` | Required | Atomically creates or reuses the authenticated user's active daily session and loads relevant memories when consent is enabled. |
 | POST | `/api/checkin/{session_id}/message` | Required | Processes a message in an active session through the configured LLM provider. |
-| POST | `/api/checkin/{session_id}/end` | Required | Completes the session and schedules memory extraction. |
+| POST | `/api/checkin/{session_id}/end` | Required | Generates a short Gemini summary, stores the completed conversation and summary, and schedules memory extraction. |
 
 The section serves the elderly user's daily wellness workflow: session
 lifecycle, dialogue persistence, wellness summaries, and the intended connection
@@ -68,7 +68,10 @@ POST /api/checkin/{session_id}/message
 POST /api/checkin/{session_id}/end
 ```
 
-Sessions are scoped by both `session_id` and authenticated `user_id`.
+Sessions are scoped by both `session_id` and authenticated `user_id`. Active
+sessions are unique per user and session type through a MongoDB partial unique
+index, so concurrent workers cannot create duplicate active sessions. Reusing an
+active session returns its existing messages and memory context.
 Post-check-in memory extraction is background work; extraction failure does not
 invalidate a completed check-in.
 

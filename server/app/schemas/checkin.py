@@ -65,6 +65,7 @@ class CheckinResponse(BaseModel):
     )
     summary: str = Field(...)
     dialogue: List[DialogueTurn] = Field(default_factory=list)
+    messages: List[DialogueTurn] = Field(default_factory=list)
     follow_ups: List[str] = Field(default_factory=list, alias="followUps")
 
 

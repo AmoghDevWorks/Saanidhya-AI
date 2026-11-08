@@ -107,3 +107,26 @@ def test_gemini_maps_timeout(monkeypatch):
     monkeypatch.setattr(genai, "Client", SlowClient)
     with pytest.raises(GnaniIntegrationUnavailable, match="timed out"):
         asyncio.run(GeminiService().respond("Hello", [], "en"))
+
+
+def test_gemini_generates_short_conversation_summary(monkeypatch):
+    from app.config import settings
+    from google import genai
+
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "test-key")
+    FakeModels.calls = []
+    monkeypatch.setattr(genai, "Client", FakeClient)
+
+    summary = asyncio.run(
+        GeminiService().summarize(
+            [
+                {"speaker": "user", "text": "I slept well last night."},
+                {"speaker": "saanidhya", "text": "That is good to hear."},
+            ]
+        )
+    )
+
+    assert summary.startswith("I hope")
+    call = FakeModels.calls[-1]
+    assert call["config"]["max_output_tokens"] == 128
+    assert "Summarize this elderly care conversation" in call["config"]["system_instruction"]

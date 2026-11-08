@@ -101,6 +101,61 @@ class GeminiService:
             "model": settings.GEMINI_MODEL,
         }
 
+    async def summarize(
+        self, messages: List[Dict[str, Any]]
+    ) -> str:
+        if not messages:
+            return "No conversation recorded."
+        if not settings.GEMINI_API_KEY:
+            raise GnaniIntegrationUnavailable(
+                "Gemini API key is not configured."
+            )
+        transcript = "\n".join(
+            f"{'Saanidhya' if item.get('speaker') == 'saanidhya' else 'User'}: "
+            f"{item.get('text', '').strip()}"
+            for item in messages
+            if isinstance(item.get("text"), str) and item.get("text", "").strip()
+        )
+        if not transcript:
+            return "No conversation recorded."
+        try:
+            async with self._inference_semaphore:
+                client = await self._get_client()
+                started = time.perf_counter()
+                response = await asyncio.wait_for(
+                    client.aio.models.generate_content(
+                        model=settings.GEMINI_MODEL,
+                        contents=[{"role": "user", "parts": [{"text": transcript}]}],
+                        config={
+                            "system_instruction": (
+                                "Summarize this elderly care conversation in one "
+                                "or two short sentences. Mention only facts stated "
+                                "in the conversation. Do not diagnose, speculate, "
+                                "or address the user."
+                            ),
+                            "temperature": settings.GEMINI_TEMPERATURE,
+                            "max_output_tokens": 128,
+                        },
+                    ),
+                    timeout=settings.GEMINI_INFERENCE_TIMEOUT_SECONDS,
+                )
+                logger.info(
+                    "Gemini conversation summary completed in %.2fs",
+                    time.perf_counter() - started,
+                )
+        except asyncio.TimeoutError as exc:
+            raise GnaniIntegrationUnavailable("Gemini summary timed out.") from exc
+        except GnaniIntegrationUnavailable:
+            raise
+        except Exception as exc:
+            raise GnaniIntegrationUnavailable(
+                _gemini_error_message(exc)
+            ) from exc
+        summary = getattr(response, "text", None)
+        if not isinstance(summary, str) or not summary.strip():
+            raise GnaniIntegrationUnavailable("Gemini returned an empty summary.")
+        return summary.strip()
+
     async def _get_client(self) -> Any:
         if self._client is not None:
             return self._client

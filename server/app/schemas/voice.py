@@ -50,6 +50,7 @@ class CheckinStartResponse(BaseModel):
     session_id: str
     started_at: datetime
     relevant_memories: List[Dict[str, Any]] = Field(default_factory=list)
+    messages: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class CheckinMessageRequest(BaseModel):

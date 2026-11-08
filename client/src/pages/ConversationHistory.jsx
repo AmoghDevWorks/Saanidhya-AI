@@ -43,7 +43,8 @@ export const ConversationHistory = () => {
       item.summary?.toLowerCase().includes(term) ||
       item.mood?.toLowerCase().includes(term) ||
       item.physicalComfort?.toLowerCase().includes(term) ||
-      item.medicationDetails?.toLowerCase().includes(term)
+      item.medicationDetails?.toLowerCase().includes(term) ||
+      item.messages?.some((message) => message.text?.toLowerCase().includes(term))
     );
   });
 
@@ -158,20 +159,20 @@ export const ConversationHistory = () => {
                     )}
                   </div>
 
-                  {/* Expand Dialogue Transcript Button */}
-                  {item.dialogue && item.dialogue.length > 0 && (
+                  {/* Expand Conversation Button */}
+                  {(item.messages?.length > 0 || item.dialogue?.length > 0) && (
                     <div className="pt-2">
                       <button
                         onClick={() => toggleExpand(item.id)}
                         className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
                       >
-                        <span>{isExpanded ? 'Hide Conversation Transcript' : 'View Full Transcript'}</span>
+                        <span>{isExpanded ? 'Hide Conversation' : 'View Full Conversation'}</span>
                         {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                       </button>
 
                       {isExpanded && (
                         <div className="mt-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5 text-xs">
-                          {item.dialogue.map((turn, tIdx) => (
+                          {(item.messages || item.dialogue || []).map((turn, tIdx) => (
                             <div key={tIdx} className="flex gap-2.5">
                               <span className="font-bold uppercase tracking-wider text-slate-400 w-20 flex-shrink-0">
                                 {turn.speaker === 'saanidhya' ? 'Saanidhya:' : 'User:'}

@@ -1,8 +1,11 @@
 import uuid
+import logging
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 from pymongo.collection import Collection
 
 from app.database import (
@@ -30,6 +33,7 @@ from app.schemas.voice import (
 )
 from app.services.gnani_service import (
     GnaniIntegrationUnavailable,
+    gemini_service,
     generate_llm_response,
 )
 from app.services.memory_extraction_service import (
@@ -43,6 +47,7 @@ from app.services.memory_service import (
 )
 
 router = APIRouter(prefix="", tags=["Check-in"])
+logger = logging.getLogger("saanidhya.checkin")
 
 
 @router.get(
@@ -99,8 +104,16 @@ async def start_checkin(
     checkins_col: Collection = Depends(get_checkins_collection),
     memories_col: Collection = Depends(get_memories_collection),
     users_col: Collection = Depends(get_users_collection),
+    request_id: Optional[str] = Header(default=None, alias="X-Request-ID"),
 ):
-    session_id = str(uuid.uuid4())
+    session_type = "daily_morning"
+    correlation_id = request_id or str(uuid.uuid4())
+    logger.info(
+        "Check-in start requested user_id=%s session_type=%s request_id=%s",
+        current_user.id,
+        session_type,
+        correlation_id,
+    )
     started_at = datetime.now(timezone.utc)
     memory_context = []
     user = users_col.find_one({"_id": current_user.id}) or {}
@@ -108,28 +121,97 @@ async def start_checkin(
         memory_context = retrieve_relevant_memories(
             MemoryRepository(memories_col), current_user.id
         )
-    checkins_col.insert_one(
+    existing_session = checkins_col.find_one(
         {
-            "_id": session_id,
             "user_id": current_user.id,
-            "session_type": "daily_morning",
-            "started_at": started_at,
+            "session_type": session_type,
             "status": "active",
-            "messages": [],
-            "memory_context": memory_context,
-        }
+        },
+        sort=[("started_at", 1)],
+    )
+    if existing_session:
+        logger.info(
+            "Check-in session reused user_id=%s session_type=%s "
+            "session_id=%s request_id=%s",
+            current_user.id,
+            session_type,
+            existing_session["_id"],
+            correlation_id,
+        )
+        return CheckinStartResponse(
+            session_id=existing_session["_id"],
+            started_at=existing_session["started_at"],
+            relevant_memories=[
+                {
+                    "category": item["category"],
+                    "key": item["key"],
+                    "value": item["value"],
+                }
+                for item in existing_session.get("memory_context", [])
+            ],
+            messages=existing_session.get("messages", []),
+        )
+    session_id = str(uuid.uuid4())
+    active_key = f"{current_user.id}:{session_type}"
+    session_document = {
+        "_id": session_id,
+        "user_id": current_user.id,
+        "session_type": session_type,
+        "active_key": active_key,
+        "started_at": started_at,
+        "status": "active",
+        "messages": [],
+        "memory_context": memory_context,
+    }
+    try:
+        session = checkins_col.find_one_and_update(
+            {
+                "active_key": active_key,
+                "status": "active",
+            },
+            {"$setOnInsert": session_document},
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+    except DuplicateKeyError:
+        session = checkins_col.find_one(
+            {
+                "user_id": current_user.id,
+                "session_type": session_type,
+                "status": "active",
+            }
+        )
+    if not session:
+        logger.error(
+            "Check-in start failed to create or reuse session user_id=%s "
+            "session_type=%s request_id=%s",
+            current_user.id,
+            session_type,
+            correlation_id,
+        )
+        raise HTTPException(
+            status_code=503, detail="Unable to create a check-in session."
+        )
+    reused = session["_id"] != session_id
+    logger.info(
+        "Check-in session %s user_id=%s session_type=%s request_id=%s",
+        "reused" if reused else "created",
+        current_user.id,
+        session_type,
+        correlation_id,
     )
     return CheckinStartResponse(
-        session_id=session_id,
-        started_at=started_at,
+        session_id=session["_id"],
+        started_at=session["started_at"],
         relevant_memories=[
             {
                 "category": item["category"],
                 "key": item["key"],
                 "value": item["value"],
             }
-            for item in memory_context
+            for item in session.get("memory_context", [])
         ],
+        messages=session.get("messages", []),
     )
 
 
@@ -139,6 +221,7 @@ async def checkin_message(
     payload: CheckinMessageRequest,
     current_user: UserResponse = Depends(get_current_user),
     checkins_col: Collection = Depends(get_checkins_collection),
+    request_id: Optional[str] = Header(default=None, alias="X-Request-ID"),
 ):
     if not payload.transcript:
         raise HTTPException(
@@ -149,6 +232,12 @@ async def checkin_message(
         {"_id": session_id, "user_id": current_user.id, "status": "active"}
     )
     if not session:
+        logger.warning(
+            "Check-in message rejected session_id=%s user_id=%s request_id=%s",
+            session_id,
+            current_user.id,
+            request_id or "none",
+        )
         raise HTTPException(status_code=404, detail="Check-in session not found.")
     try:
         response = await generate_llm_response(
@@ -164,14 +253,38 @@ async def checkin_message(
     except Exception as exc:
         raise HTTPException(status_code=502, detail="LLM request failed.") from exc
 
-    messages = list(session.get("messages", []))
-    messages.extend(
-        [
-            {"speaker": "user", "text": payload.transcript},
-            {"speaker": "saanidhya", "text": response.response_text},
-        ]
+    update_result = checkins_col.update_one(
+        {
+            "_id": session_id,
+            "user_id": current_user.id,
+            "status": "active",
+        },
+        {
+            "$push": {
+                "messages": {
+                    "$each": [
+                        {"speaker": "user", "text": payload.transcript},
+                        {"speaker": "saanidhya", "text": response.response_text},
+                    ]
+                }
+            }
+        },
     )
-    checkins_col.update_one({"_id": session_id}, {"$set": {"messages": messages}})
+    if update_result.modified_count != 1:
+        logger.error(
+            "Check-in message persistence failed session_id=%s user_id=%s "
+            "request_id=%s",
+            session_id,
+            current_user.id,
+            request_id or "none",
+        )
+        raise HTTPException(status_code=503, detail="Could not save conversation.")
+    logger.info(
+        "Check-in message persisted session_id=%s user_id=%s request_id=%s",
+        session_id,
+        current_user.id,
+        request_id or "none",
+    )
     return CheckinMessageResponse(
         session_id=session_id, transcript=payload.transcript, response=response
     )
@@ -193,11 +306,18 @@ async def end_checkin(
     if not session:
         raise HTTPException(status_code=404, detail="Check-in session not found.")
     messages = session.get("messages", [])
-    summary = (
-        f"Voice check-in completed with {len(messages)} conversation messages."
-        if messages
-        else "Voice check-in completed without conversation messages."
-    )
+    summary = "No conversation recorded."
+    if messages:
+        try:
+            summary = await gemini_service.summarize(messages)
+        except GnaniIntegrationUnavailable as exc:
+            logger.warning(
+                "Check-in summary generation failed session_id=%s user_id=%s: %s",
+                session_id,
+                current_user.id,
+                str(exc),
+            )
+            summary = "Summary unavailable."
     checkins_col.update_one(
         {"_id": session_id},
         {
@@ -206,6 +326,7 @@ async def end_checkin(
                 "status": "completed",
                 "summary": summary,
                 "dialogue": messages,
+                "timestamp": ended_at,
             }
         },
     )

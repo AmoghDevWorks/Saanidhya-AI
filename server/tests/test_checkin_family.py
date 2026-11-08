@@ -9,6 +9,7 @@ from app.database import (
     get_reminders_collection,
     get_relationships_collection,
     get_notifications_collection,
+    get_memories_collection,
 )
 
 
@@ -17,20 +18,23 @@ class MockCollection:
     def __init__(self):
         self.data = {}
 
-    def find_one(self, filter_dict):
-        if "_id" in filter_dict:
-            return self.data.get(filter_dict["_id"])
-        if "email" in filter_dict:
-            target_email = filter_dict["email"]
-            for d in self.data.values():
-                if d.get("email") == target_email:
-                    return d.copy()
-        if "user_id" in filter_dict:
-            target_uid = filter_dict["user_id"]
-            for d in self.data.values():
-                if d.get("user_id") == target_uid:
-                    return d.copy()
+    def find_one(self, filter_dict, sort=None):
+        for d in self.data.values():
+            if all(d.get(key) == value for key, value in filter_dict.items()):
+                return d.copy()
         return None
+
+    def find_one_and_update(
+        self, filter_dict, update_dict, upsert=False, return_document=None
+    ):
+        existing = self.find_one(filter_dict)
+        if existing:
+            return existing
+        if not upsert:
+            return None
+        document = update_dict.get("$setOnInsert", {}).copy()
+        self.insert_one(document)
+        return document.copy()
 
     def insert_one(self, doc):
         doc_id = doc.get("_id", "mock-id-1")
@@ -39,9 +43,18 @@ class MockCollection:
 
     def update_one(self, filter_dict, update_dict):
         doc_id = filter_dict.get("_id")
-        if doc_id in self.data:
-            if "$set" in update_dict:
-                self.data[doc_id].update(update_dict["$set"])
+        document = self.data.get(doc_id)
+        if not document or any(
+            document.get(key) != value
+            for key, value in filter_dict.items()
+            if key != "_id"
+        ):
+            return type("UpdateResult", (), {"modified_count": 0})()
+        if "$set" in update_dict:
+            document.update(update_dict["$set"])
+        if "$push" in update_dict:
+            for field, push in update_dict["$push"].items():
+                document.setdefault(field, []).extend(push["$each"])
         return type("UpdateResult", (), {"modified_count": 1})()
 
     def find(self, filter_dict=None):
@@ -73,6 +86,7 @@ def mock_db():
     reminders_col = MockCollection()
     relationships_col = MockCollection()
     notifications_col = MockCollection()
+    memories_col = MockCollection()
 
     app.dependency_overrides[get_users_collection] = lambda: users_col
     app.dependency_overrides[get_checkins_collection] = lambda: checkins_col
@@ -80,6 +94,7 @@ def mock_db():
     app.dependency_overrides[get_reminders_collection] = lambda: reminders_col
     app.dependency_overrides[get_relationships_collection] = lambda: relationships_col
     app.dependency_overrides[get_notifications_collection] = lambda: notifications_col
+    app.dependency_overrides[get_memories_collection] = lambda: memories_col
 
     yield {
         "users": users_col,
@@ -88,6 +103,7 @@ def mock_db():
         "reminders": reminders_col,
         "relationships": relationships_col,
         "notifications": notifications_col,
+        "memories": memories_col,
     }
     app.dependency_overrides.clear()
 
@@ -119,6 +135,129 @@ def test_get_today_summary(auth_client):
     data = res.json()
     assert "hasCheckedInToday" in data
     assert "mood" in data
+
+
+def test_repeated_checkin_start_reuses_active_session(auth_client, mock_db):
+    first = auth_client.post("/api/checkin/start")
+    second = auth_client.post("/api/checkin/start")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["session_id"] == second.json()["session_id"]
+    assert len(mock_db["checkins"].data) == 1
+    assert next(iter(mock_db["checkins"].data.values()))["active_key"].endswith(
+        ":daily_morning"
+    )
+
+
+def test_completed_checkin_can_be_followed_by_new_session(auth_client, mock_db):
+    first = auth_client.post("/api/checkin/start")
+    session_id = first.json()["session_id"]
+    ended = auth_client.post(f"/api/checkin/{session_id}/end")
+    second = auth_client.post("/api/checkin/start")
+
+    assert ended.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["session_id"] != session_id
+    assert len(mock_db["checkins"].data) == 2
+
+
+def test_different_users_get_independent_active_sessions(auth_client, mock_db):
+    first = auth_client.post("/api/checkin/start")
+    second_client = TestClient(app)
+    registration = second_client.post(
+        "/api/auth/register",
+        json={
+            "fullName": "Senior Meera",
+            "email": "meera@example.com",
+            "password": "Password123#",
+            "confirmPassword": "Password123#",
+            "accountType": "elderly",
+            "termsAccepted": True,
+        },
+    )
+    second_token = registration.json()["accessToken"]
+    second_client.headers = {
+        "Authorization": f"Bearer {second_token}"
+    }
+    second = second_client.post("/api/checkin/start")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["session_id"] != second.json()["session_id"]
+    assert len(mock_db["checkins"].data) == 2
+
+
+def test_message_persistence_appends_without_replacing_history(
+    auth_client, mock_db, monkeypatch
+):
+    import app.routes.checkin as checkin_route
+    from app.schemas.voice import VoiceResponse
+
+    async def fake_response(*args, **kwargs):
+        return VoiceResponse(response_text="I am glad to hear that.")
+
+    monkeypatch.setattr(checkin_route, "generate_llm_response", fake_response)
+    started = auth_client.post("/api/checkin/start")
+    session_id = started.json()["session_id"]
+    first = auth_client.post(
+        f"/api/checkin/{session_id}/message",
+        json={"transcript": "I slept well.", "conversation": []},
+    )
+    second = auth_client.post(
+        f"/api/checkin/{session_id}/message",
+        json={"transcript": "My knees feel better.", "conversation": []},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    stored = mock_db["checkins"].data[session_id]["messages"]
+    assert [item["speaker"] for item in stored] == [
+        "user",
+        "saanidhya",
+        "user",
+        "saanidhya",
+    ]
+
+    async def failed_response(*args, **kwargs):
+        raise RuntimeError("Gemini unavailable")
+
+    monkeypatch.setattr(checkin_route, "generate_llm_response", failed_response)
+    failed = auth_client.post(
+        f"/api/checkin/{session_id}/message",
+        json={"transcript": "This request should not be stored.", "conversation": []},
+    )
+
+    assert failed.status_code == 502
+    assert len(mock_db["checkins"].data[session_id]["messages"]) == 4
+
+
+def test_end_checkin_stores_gemini_summary_and_messages(
+    auth_client, mock_db, monkeypatch
+):
+    import app.routes.checkin as checkin_route
+
+    async def fake_summary(messages):
+        assert len(messages) == 2
+        return "The user slept well and felt comfortable."
+
+    monkeypatch.setattr(checkin_route.gemini_service, "summarize", fake_summary)
+    started = auth_client.post("/api/checkin/start")
+    session_id = started.json()["session_id"]
+    mock_db["checkins"].data[session_id]["messages"] = [
+        {"speaker": "user", "text": "I slept well."},
+        {"speaker": "saanidhya", "text": "I am glad to hear that."},
+    ]
+
+    ended = auth_client.post(f"/api/checkin/{session_id}/end")
+    history = auth_client.get("/api/checkin/history")
+
+    assert ended.status_code == 200
+    assert history.status_code == 200
+    record = history.json()[0]
+    assert record["summary"] == "The user slept well and felt comfortable."
+    assert len(record["messages"]) == 2
+    assert len(record["dialogue"]) == 2
 
 
 def test_save_voice_checkin(auth_client):

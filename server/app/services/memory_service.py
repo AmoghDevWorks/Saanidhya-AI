@@ -25,7 +25,7 @@ logger = logging.getLogger("saanidhya.memory_service")
 
 def format_checkin_doc(doc: Dict[str, Any]) -> CheckinResponse:
     """Safely format a MongoDB check-in document into a CheckinResponse."""
-    dialogue_raw = doc.get("dialogue", [])
+    dialogue_raw = doc.get("messages", doc.get("dialogue", []))
     dialogue = [
         DialogueTurn(
             speaker=t.get("speaker", "saanidhya"),
@@ -39,16 +39,20 @@ def format_checkin_doc(doc: Dict[str, Any]) -> CheckinResponse:
         id=str(doc.get("_id")),
         userId=str(doc.get("user_id")),
         sessionType=doc.get("session_type", "daily_morning"),
-        timestamp=doc.get("timestamp") or datetime.now(timezone.utc),
+        timestamp=(
+            doc.get("timestamp")
+            or doc.get("ended_at")
+            or doc.get("started_at")
+            or datetime.now(timezone.utc)
+        ),
         status=doc.get("status", "completed"),
         mood=doc.get("mood") or "Not recorded",
         medicationConfirmed=doc.get("medication_confirmed"),
         medicationDetails=doc.get("medication_details"),
         physicalComfort=doc.get("physical_comfort"),
-        summary=doc.get(
-            "summary", "No summary recorded."
-        ),
+        summary=doc.get("summary") or "Summary unavailable.",
         dialogue=dialogue,
+        messages=dialogue,
         followUps=doc.get("follow_ups", []),
     )
 

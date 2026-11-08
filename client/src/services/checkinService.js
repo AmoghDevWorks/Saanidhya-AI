@@ -1,8 +1,10 @@
 import api, { getErrorMessage } from './api';
 
 export const checkinService = {
-  async startSession() {
-    const response = await api.post('/api/checkin/start');
+  async startSession(requestId) {
+    const response = await api.post('/api/checkin/start', null, {
+      headers: requestId ? { 'X-Request-ID': requestId } : undefined,
+    });
     return response.data;
   },
 

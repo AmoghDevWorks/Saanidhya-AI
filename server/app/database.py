@@ -176,6 +176,16 @@ def init_indexes():
             unique=True,
             background=True,
         )
+        get_checkins_collection().create_index(
+            [("active_key", ASCENDING)],
+            unique=True,
+            partialFilterExpression={
+                "status": "active",
+                "active_key": {"$exists": True},
+            },
+            background=True,
+        )
+        logger.info("Successfully created/verified unique active check-in index")
     except Exception as e:
         logger.warning(
             f"Could not initialize MongoDB indexes (will retry on active connection): {e}"

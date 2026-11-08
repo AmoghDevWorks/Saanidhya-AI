@@ -29,12 +29,30 @@ export const VoiceCheckin = () => {
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
   const audioRef = useRef(null);
+  const sessionStartRef = useRef(null);
+  const messagesRef = useRef([]);
+  const responseInFlightRef = useRef(false);
+  const sessionIdRef = useRef(null);
+  const endedRef = useRef(false);
+  const endTimerRef = useRef(null);
+  const requestIdRef = useRef(
+    window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`
+  );
 
   useEffect(() => {
     let active = true;
-    checkinService.startSession()
+    if (!sessionStartRef.current) {
+      sessionStartRef.current = checkinService.startSession(requestIdRef.current);
+    }
+    sessionStartRef.current
       .then((session) => {
-        if (active) setSessionId(session.session_id);
+        if (active) {
+          setSessionId(session.session_id);
+          sessionIdRef.current = session.session_id;
+          const restoredMessages = session.messages || [];
+          messagesRef.current = restoredMessages;
+          setMessages(restoredMessages);
+        }
       })
       .catch((error) => {
         if (active) {
@@ -44,22 +62,40 @@ export const VoiceCheckin = () => {
       });
     return () => {
       active = false;
+      if (endTimerRef.current) {
+        window.clearTimeout(endTimerRef.current);
+      }
+      if (sessionIdRef.current && !endedRef.current) {
+        endTimerRef.current = window.setTimeout(() => {
+          if (!endedRef.current && sessionIdRef.current) {
+            endedRef.current = true;
+            checkinService.endSession(sessionIdRef.current).catch(() => {});
+          }
+        }, 250);
+      }
       if (mediaRecorder.current?.state === 'recording') mediaRecorder.current.stop();
     };
   }, []);
 
   const handleResponse = useCallback(async (transcript) => {
-    if (!transcript.trim() || !sessionId) return;
-    setMessages((current) => [...current, { speaker: 'user', text: transcript, time: now() }]);
+    if (!transcript.trim() || !sessionId || responseInFlightRef.current) return;
+    responseInFlightRef.current = true;
+    const conversation = messagesRef.current;
+    const userMessage = { speaker: 'user', text: transcript, time: now() };
+    messagesRef.current = [...conversation, userMessage];
+    setMessages(messagesRef.current);
     setInputMessage('');
     setVoiceState('thinking');
     setErrorMessage('');
     try {
-      const result = await checkinService.sendMessage(sessionId, transcript, messages);
-      setMessages((current) => [
-        ...current,
-        { speaker: 'saanidhya', text: result.response.response_text, time: now() },
-      ]);
+      const result = await checkinService.sendMessage(sessionId, transcript, conversation);
+      const assistantMessage = {
+        speaker: 'saanidhya',
+        text: result.response.response_text,
+        time: now(),
+      };
+      messagesRef.current = [...messagesRef.current, assistantMessage];
+      setMessages(messagesRef.current);
       if (!speechMuted) {
         try {
           const audio = await checkinService.synthesize(
@@ -84,8 +120,10 @@ export const VoiceCheckin = () => {
     } catch (error) {
       setVoiceState('error');
       setErrorMessage(error.response?.data?.detail || error.message);
+    } finally {
+      responseInFlightRef.current = false;
     }
-  }, [messages, sessionId, speechMuted]);
+  }, [sessionId, speechMuted]);
 
   const handleMicClick = async () => {
     if (voiceState === 'listening') {
@@ -149,6 +187,10 @@ export const VoiceCheckin = () => {
     if (!sessionId) return;
     setIsSaving(true);
     try {
+      endedRef.current = true;
+      if (endTimerRef.current) {
+        window.clearTimeout(endTimerRef.current);
+      }
       await checkinService.endSession(sessionId);
       setVoiceState('completed');
       navigate('/dashboard', { replace: true });
