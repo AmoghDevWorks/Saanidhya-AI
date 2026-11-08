@@ -1,13 +1,14 @@
 import asyncio
 
+import httpx
 import pytest
 
 from app.services.gnani_service import (
-    EvonService,
-    GnaniIntegrationUnavailable,
     PrismaService,
     TimbreService,
 )
+from app.services.gemini_service import GeminiService
+from app.services.llm_errors import GnaniIntegrationUnavailable
 
 
 def test_prisma_rejects_empty_audio():
@@ -20,13 +21,13 @@ def test_provider_adapters_fail_explicitly_without_official_contracts(monkeypatc
 
     monkeypatch.setattr(settings, "PRISMA_API_KEY", "")
     monkeypatch.setattr(settings, "TIMBRE_API_KEY", "")
-    monkeypatch.setattr(settings, "EVON_INFERENCE_MODE", "disabled")
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
     with pytest.raises(GnaniIntegrationUnavailable):
         asyncio.run(
             PrismaService().transcribe(b"audio", "checkin.ogg", "audio/ogg")
         )
-    with pytest.raises(GnaniIntegrationUnavailable):
-        asyncio.run(EvonService().respond("I slept well.", [], "en"))
+    with pytest.raises(GnaniIntegrationUnavailable, match="Gemini"):
+        asyncio.run(GeminiService().respond("I slept well.", [], "en"))
     with pytest.raises(GnaniIntegrationUnavailable):
         asyncio.run(TimbreService().synthesize("Good morning.", "en"))
 
@@ -100,46 +101,3 @@ def test_timbre_returns_binary_audio_as_base64(monkeypatch):
     _, request = FakeAsyncClient.calls[-1]
     assert request["headers"]["X-API-Key-ID"] == "test-key"
     assert request["json"]["model"] == "timbre-v2.5"
-
-
-def test_evon_builds_chat_messages_with_history_and_memory():
-    from app.services.gnani_service import _build_evon_messages
-
-    messages = _build_evon_messages(
-        [
-            {"speaker": "user", "text": "I slept well."},
-            {"speaker": "saanidhya", "text": "That is good to hear."},
-        ],
-        [{"category": "family", "key": "grandson_exam", "value": "next Monday"}],
-        "How are you?",
-    )
-
-    assert messages[0]["role"] == "system"
-    assert "grandson_exam" in messages[1]["content"]
-    assert messages[-1] == {"role": "user", "content": "How are you?"}
-
-
-def test_evon_does_not_repeat_failed_initialization(monkeypatch):
-    from app.config import settings
-    import app.services.gnani_service as module
-
-    monkeypatch.setattr(settings, "EVON_ENABLED", True)
-    monkeypatch.setattr(settings, "EVON_INFERENCE_MODE", "local")
-    service = module.EvonService()
-
-    class MissingTransformers:
-        def __init__(self):
-            self.calls = 0
-
-        def import_module(self, name):
-            self.calls += 1
-            raise ModuleNotFoundError(name)
-
-    missing = MissingTransformers()
-    monkeypatch.setattr(module.importlib, "import_module", missing.import_module)
-
-    with pytest.raises(GnaniIntegrationUnavailable):
-        asyncio.run(service.respond("Hello", [], "en"))
-    with pytest.raises(GnaniIntegrationUnavailable):
-        asyncio.run(service.respond("Hello again", [], "en"))
-    assert missing.calls == 1

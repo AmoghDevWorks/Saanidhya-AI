@@ -30,7 +30,7 @@ from app.schemas.voice import (
 )
 from app.services.gnani_service import (
     GnaniIntegrationUnavailable,
-    evon_service,
+    generate_llm_response,
 )
 from app.services.memory_extraction_service import (
     safely_extract_and_store_memories,
@@ -151,7 +151,7 @@ async def checkin_message(
     if not session:
         raise HTTPException(status_code=404, detail="Check-in session not found.")
     try:
-        response = await evon_service.respond(
+        response = await generate_llm_response(
             payload.transcript,
             payload.conversation,
             payload.language,
@@ -162,7 +162,7 @@ async def checkin_message(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Evon request failed.") from exc
+        raise HTTPException(status_code=502, detail="LLM request failed.") from exc
 
     messages = list(session.get("messages", []))
     messages.extend(

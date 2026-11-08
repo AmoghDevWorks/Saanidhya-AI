@@ -1,23 +1,16 @@
-"""Backend adapters for Prisma, local Evon Transformers, and Timbre."""
+"""Backend adapters for Prisma STT, Gemini conversation, and Timbre TTS."""
 
-import asyncio
 import base64
-import importlib
 import logging
-from pathlib import Path
-from threading import Lock
 from typing import Any, Dict, List, Optional
 
 import httpx
 
 from app.config import settings
 from app.schemas.voice import SynthesisResponse, VoiceResponse
+from app.services.llm_errors import GnaniIntegrationUnavailable
 
 logger = logging.getLogger("saanidhya.gnani")
-
-
-class GnaniIntegrationUnavailable(RuntimeError):
-    """Raised when a provider is unavailable or not configured."""
 
 
 class PrismaService:
@@ -50,11 +43,6 @@ class PrismaService:
             raise ValueError(
                 "Unsupported audio format. Use WAV, MP3, OGG, FLAC, AAC, or M4A."
             )
-        fields = {
-            "model": model or settings.PRISMA_MODEL,
-            "language_code": language_code or settings.PRISMA_LANGUAGE_CODE,
-            "format": output_format or settings.PRISMA_FORMAT,
-        }
         try:
             async with httpx.AsyncClient(
                 timeout=settings.GNANI_REQUEST_TIMEOUT_SECONDS
@@ -69,7 +57,11 @@ class PrismaService:
                             content_type or allowed_types[suffix],
                         )
                     },
-                    data=fields,
+                    data={
+                        "model": model or settings.PRISMA_MODEL,
+                        "language_code": language_code or settings.PRISMA_LANGUAGE_CODE,
+                        "format": output_format or settings.PRISMA_FORMAT,
+                    },
                 )
         except httpx.TimeoutException as exc:
             raise GnaniIntegrationUnavailable("Prisma request timed out.") from exc
@@ -91,137 +83,6 @@ class PrismaService:
         }
 
 
-class EvonService:
-    """Lazy, process-local Transformers service for the Evon model.
-
-    The model is loaded only on the first inference request. A failed load is
-    cached so an unavailable 30B model cannot trigger repeated expensive retries.
-    """
-
-    provider = "evon"
-    model_id = "gnani/gnani-evon-v3.3-30B-A3B"
-
-    def __init__(self) -> None:
-        self._model: Any = None
-        self._tokenizer: Any = None
-        self._load_lock = Lock()
-        self._inference_semaphore = asyncio.Semaphore(
-            max(1, settings.EVON_MAX_CONCURRENT_REQUESTS)
-        )
-        self._load_error: Optional[str] = None
-        self._status = "disabled" if not settings.EVON_ENABLED else "not_loaded"
-
-    async def respond(
-        self,
-        transcript: str,
-        conversation: List[Dict[str, Any]],
-        language: Optional[str] = None,
-        memory_context: Optional[List[Dict[str, Any]]] = None,
-    ) -> VoiceResponse:
-        if not transcript.strip():
-            raise ValueError("Transcript is empty.")
-        if not settings.EVON_ENABLED:
-            raise GnaniIntegrationUnavailable("Evon is disabled by configuration.")
-        if settings.EVON_INFERENCE_MODE != "local":
-            raise GnaniIntegrationUnavailable(
-                "Evon supports local Transformers inference only."
-            )
-        messages = _build_evon_messages(
-            conversation, memory_context or [], transcript
-        )
-        try:
-            async with asyncio.timeout(settings.EVON_INFERENCE_TIMEOUT_SECONDS):
-                async with self._inference_semaphore:
-                    return await asyncio.to_thread(
-                        self._generate_local, messages, language
-                    )
-        except TimeoutError as exc:
-            raise GnaniIntegrationUnavailable("Evon inference timed out.") from exc
-
-    def status(self) -> Dict[str, Any]:
-        return {
-            "provider": self.provider,
-            "model_id": settings.EVON_MODEL_ID,
-            "enabled": settings.EVON_ENABLED,
-            "mode": settings.EVON_INFERENCE_MODE,
-            "state": self._status,
-            "error": self._load_error,
-            "cache_dir": settings.EVON_MODEL_CACHE_DIR,
-        }
-
-    def _ensure_loaded(self) -> None:
-        if self._model is not None and self._tokenizer is not None:
-            return
-        if self._load_error:
-            raise GnaniIntegrationUnavailable(self._load_error)
-        with self._load_lock:
-            if self._model is not None and self._tokenizer is not None:
-                return
-            if self._load_error:
-                raise GnaniIntegrationUnavailable(self._load_error)
-            self._status = "loading"
-            try:
-                transformers = importlib.import_module("transformers")
-                cache_dir = str(Path(settings.EVON_MODEL_CACHE_DIR).resolve())
-                self._tokenizer = transformers.AutoTokenizer.from_pretrained(
-                    settings.EVON_MODEL_ID,
-                    cache_dir=cache_dir,
-                )
-                self._model = transformers.AutoModelForCausalLM.from_pretrained(
-                    settings.EVON_MODEL_ID,
-                    cache_dir=cache_dir,
-                    device_map=settings.EVON_DEVICE_MAP,
-                    torch_dtype="auto",
-                )
-                self._status = "ready"
-            except Exception as exc:
-                self._model = None
-                self._tokenizer = None
-                self._status = "unavailable"
-                self._load_error = (
-                    "Evon local model initialization failed. "
-                    f"{type(exc).__name__}: {exc}"
-                )
-                logger.warning("Evon initialization failed: %s", type(exc).__name__)
-                raise GnaniIntegrationUnavailable(self._load_error) from exc
-
-    def _generate_local(
-        self, messages: List[Dict[str, str]], language: Optional[str]
-    ) -> VoiceResponse:
-        del language
-        self._ensure_loaded()
-        try:
-            inputs = self._tokenizer.apply_chat_template(
-                messages,
-                add_generation_prompt=True,
-                tokenize=True,
-                return_dict=True,
-                return_tensors="pt",
-            )
-            input_device = next(self._model.parameters()).device
-            inputs = inputs.to(input_device)
-            outputs = self._model.generate(
-                **inputs,
-                max_new_tokens=settings.EVON_MAX_NEW_TOKENS,
-                do_sample=True,
-                temperature=0.7,
-                top_p=0.9,
-            )
-            prompt_length = inputs["input_ids"].shape[-1]
-            text = self._tokenizer.decode(
-                outputs[0][prompt_length:], skip_special_tokens=True
-            ).strip()
-            if not text:
-                raise RuntimeError("Evon returned an empty response.")
-            return VoiceResponse(response_text=text)
-        except GnaniIntegrationUnavailable:
-            raise
-        except Exception as exc:
-            raise GnaniIntegrationUnavailable(
-                f"Evon local inference failed: {type(exc).__name__}: {exc}"
-            ) from exc
-
-
 class TimbreService:
     provider = "timbre"
     endpoint = "https://api.vachana.ai/api/v1/tts/inference"
@@ -236,20 +97,6 @@ class TimbreService:
             raise ValueError("Response text is empty.")
         if not settings.TIMBRE_API_KEY:
             raise GnaniIntegrationUnavailable("Timbre API key is not configured.")
-        payload = {
-            "text": response_text,
-            "voice": voice or settings.TIMBRE_VOICE,
-            "model": settings.TIMBRE_MODEL,
-            "language": language or settings.TIMBRE_LANGUAGE,
-            "speed": 1.0,
-            "audio_config": {
-                "sample_rate": 48000,
-                "num_channels": 1,
-                "sample_width": 2,
-                "encoding": "linear_pcm",
-                "container": "wav",
-            },
-        }
         try:
             async with httpx.AsyncClient(
                 timeout=settings.GNANI_REQUEST_TIMEOUT_SECONDS
@@ -260,7 +107,20 @@ class TimbreService:
                         "X-API-Key-ID": settings.TIMBRE_API_KEY,
                         "Content-Type": "application/json",
                     },
-                    json=payload,
+                    json={
+                        "text": response_text,
+                        "voice": voice or settings.TIMBRE_VOICE,
+                        "model": settings.TIMBRE_MODEL,
+                        "language": language or settings.TIMBRE_LANGUAGE,
+                        "speed": 1.0,
+                        "audio_config": {
+                            "sample_rate": 48000,
+                            "num_channels": 1,
+                            "sample_width": 2,
+                            "encoding": "linear_pcm",
+                            "container": "wav",
+                        },
+                    },
                 )
         except httpx.TimeoutException as exc:
             raise GnaniIntegrationUnavailable("Timbre request timed out.") from exc
@@ -289,39 +149,29 @@ def _provider_error(provider: str, response: httpx.Response) -> str:
     return f"{provider} request failed with status {response.status_code}."
 
 
-def _build_evon_messages(
-    conversation: List[Dict[str, Any]],
-    memories: List[Dict[str, Any]],
-    transcript: str,
-) -> List[Dict[str, str]]:
-    messages: List[Dict[str, str]] = [
-        {
-            "role": "system",
-            "content": (
-                "You are Saanidhya, a warm and concise multilingual voice companion "
-                "for an elderly user. Use supplied memories only when relevant. "
-                "Do not diagnose medical conditions."
-            ),
-        }
-    ]
-    if memories:
-        context = "; ".join(
-            f"{item.get('key', item.get('category', 'memory'))}: "
-            f"{item.get('value', '')}"
-            for item in memories
-        )
-        messages.append(
-            {"role": "system", "content": f"Relevant remembered context: {context}"}
-        )
-    for item in conversation[-20:]:
-        role = "assistant" if item.get("speaker") in {"assistant", "saanidhya"} else "user"
-        content = item.get("text")
-        if isinstance(content, str) and content.strip():
-            messages.append({"role": role, "content": content})
-    messages.append({"role": "user", "content": transcript})
-    return messages
-
-
 prisma_service = PrismaService()
-evon_service = EvonService()
 timbre_service = TimbreService()
+
+
+async def generate_llm_response(
+    transcript: str,
+    conversation: List[Dict[str, Any]],
+    language: Optional[str] = None,
+    memory_context: Optional[List[Dict[str, Any]]] = None,
+) -> VoiceResponse:
+    if settings.LLM_PROVIDER.lower() != "gemini":
+        raise GnaniIntegrationUnavailable(
+            "Gemini is the only supported LLM provider."
+        )
+    return await gemini_service.respond(
+        transcript, conversation, language, memory_context
+    )
+
+
+async def llm_status() -> Dict[str, Any]:
+    return await gemini_service.status()
+
+
+from app.services.gemini_service import GeminiService
+
+gemini_service = GeminiService()

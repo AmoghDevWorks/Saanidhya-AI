@@ -63,7 +63,7 @@ def save_voice_checkin(
     now = datetime.now(timezone.utc)
     checkin_id = str(uuid.uuid4())
 
-    # Build automated Evon AI conversation summary if none provided
+    # Build an automated conversation summary if none was provided
     summary = payload.summary
     if not summary:
         mood_str = payload.mood or "Peaceful"

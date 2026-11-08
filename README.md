@@ -37,9 +37,9 @@ The goal is to make every elderly person feel heard, supported, and connected, e
 - PyMongo
 - MongoDB
 
-### AI Integration – Gnani AI
+### AI Integration
 - **Prisma:** Speech-to-Text
-- **Evon:** Reasoning and conversation analysis
+- **Gemini:** Reasoning and conversation generation
 - **Timbre:** Text-to-Speech
 
 ---
@@ -212,6 +212,11 @@ GNANI_API_KEY=your_gnani_api_key
 MONGODB_URI=your_mongodb_connection_string
 DATABASE_NAME=saanidhya
 
+# LLM provider
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your_google_ai_studio_api_key
+GEMINI_MODEL=gemini-2.5-flash
+
 # Application
 FRONTEND_URL=http://localhost:5173
 ```
@@ -258,7 +263,7 @@ and current limitations are documented in
 |---|---|---|
 | Authentication | `/api/auth` | Current profile and logout |
 | Check-ins | `/api/checkin` | Daily conversations, sessions, summaries, and history |
-| Voice | `/api/voice` | Prisma transcription, Evon responses, and Timbre synthesis |
+| Voice | `/api/voice` | Prisma transcription, configured LLM responses, and Timbre synthesis |
 | Memory | `/api/memory` | Private memory review, consent, editing, and deletion |
 | Family | `/api/family` | Caregiver dashboard, alerts, and reminders |
 | Notifications | `/api/notifications` | Family in-app notification feed and read state |
@@ -275,19 +280,25 @@ user statements from completed check-ins; raw audio is not stored as memory.
 
 ---
 
-## 🧠 Gnani AI Integration
+## 🧠 AI Provider Integration
 
-Saanidhya AI integrates Gnani AI's models to create a conversational voice experience.
+Saanidhya AI combines Gnani speech services with a configurable LLM provider to
+create a conversational voice experience.
 
 ### Prisma – Speech-to-Text
 Uses the documented `POST https://api.vachana.ai/stt/v3` multipart endpoint with
 the `X-API-Key-ID` header. The backend sends Prisma v3.0 with configurable
 language and output format settings.
 
-### Evon – Reasoning
-Uses model `gnani/gnani-evon-v3.3-30B-A3B` through the local Hugging Face
-Transformers adapter. Loading is lazy, cached, serialized to one inference at a
-time, and never starts during FastAPI application startup.
+### Gemini – Reasoning
+Google Gemini is the only LLM provider through the official `google-genai`
+Python SDK. The backend sends the dedicated Saanidhya system instructions,
+recent conversation history, and consent-scoped memories. Create a key at
+https://aistudio.google.com/apikey and keep it only in `server/.env`.
+
+Set `LLM_PROVIDER=gemini` and `GEMINI_MODEL=gemini-2.5-flash`. The backend
+returns an explicit error when Gemini fails and never falls back to another
+provider or generates a synthetic response.
 
 ### Timbre – Text-to-Speech
 Uses the documented `POST https://api.vachana.ai/api/v1/tts/inference` endpoint
@@ -299,8 +310,6 @@ Provider keys are backend-only. Configure the integration using
 ---
 
 ## 🔄 Running the Complete Application
-
-You need two separate terminals.
 
 **Terminal 1 – Frontend**
 
@@ -354,15 +363,19 @@ Once both servers are running:
 ## ⚠️ Current Limitations
 
 - Prisma and Timbre require configured provider keys and valid provider account
-  scopes. Evon requires the optional dependencies in
-  `server/requirements-evon.txt`.
-- The Evon repository contains roughly 63.5 GB of bfloat16 safetensor weights
-  across 13 shards. This exceeds the available 4 GB RTX 3050 VRAM and roughly
-  8.3 GB system RAM on the development laptop, so local inference is not
-  feasible on that laptop without a substantially larger-memory machine or a
-  verified quantized build.
-- Evon loading is lazy and reports a cached unavailable state instead of
-  repeatedly retrying or generating a fallback response.
+  scopes. Gemini requires a valid `GEMINI_API_KEY`.
+- If Gemini is unavailable, the backend returns a clear provider-unavailable
+  error and never falls back to another LLM.
+
+### Gemini troubleshooting
+
+- Check that `GEMINI_API_KEY` is present in `server/.env`; never put it in the
+  React `.env` file.
+- Confirm `GEMINI_MODEL=gemini-2.5-flash` and `LLM_PROVIDER=gemini`.
+- A missing key, invalid key, quota error, timeout, or provider outage is
+  returned as an explicit backend error; no fake response or silent fallback
+  is generated.
+
 - Family dashboard access requires an accepted relationship, elderly sharing
   consent, and the relevant relationship permission.
 - Reminder and occurrence state is persisted in MongoDB; production deployments

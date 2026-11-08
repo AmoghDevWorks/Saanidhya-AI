@@ -132,14 +132,14 @@ export const DashboardPlaceholder = ({ pageTitle = 'Dashboard Overview' }) => {
             </Link>
           </div>
 
-          {/* Module 2: Evon Reasoning & Memory */}
+          {/* Module 2: Gemini Reasoning & Memory */}
           <div className="p-6 bg-white rounded-3xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
             <div>
               <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center mb-4">
                 <Brain size={24} />
               </div>
               <h3 className="font-bold text-slate-900 text-base mb-1.5">
-                Conversational Memory (Evon)
+                Conversational Memory (Gemini)
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed mb-4">
                 Maintains context from past conversations, tracks medication

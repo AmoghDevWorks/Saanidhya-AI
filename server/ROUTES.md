@@ -45,15 +45,14 @@ Implemented in `app/routes/checkin.py`.
 | POST | `/api/checkin/save` | Required | Legacy save endpoint for a completed dialogue and wellness markers; retained for compatibility. |
 | GET | `/api/checkin/history` | Required | Previous check-ins for the authenticated user. |
 | POST | `/api/checkin/start` | Required | Creates an active check-in session and loads relevant memories when consent is enabled. |
-| POST | `/api/checkin/{session_id}/message` | Required | Processes a message in an active session through Evon. |
+| POST | `/api/checkin/{session_id}/message` | Required | Processes a message in an active session through the configured LLM provider. |
 | POST | `/api/checkin/{session_id}/end` | Required | Completes the session and schedules memory extraction. |
 
 The section serves the elderly user's daily wellness workflow: session
 lifecycle, dialogue persistence, wellness summaries, and the intended connection
 to voice reasoning and conversational memory.
 
-The session routes are implemented, but the Evon provider is currently
-unavailable. The legacy save route also applies defaults when optional wellness
+The legacy save route also applies defaults when optional wellness
 fields are omitted, so those values must not be interpreted as verified
 observations.
 
@@ -83,9 +82,9 @@ Implemented in `app/routes/voice.py` and
 | Method | Route | Auth | Intended provider | Serves |
 |---|---|---|---|---|
 | POST | `/api/voice/transcribe` | Required | Prisma | Accepts an uploaded audio file and returns a transcript. |
-| POST | `/api/voice/respond` | Required | Evon | Accepts transcript, recent conversation, and consent-scoped memory context and returns structured response data. |
+| POST | `/api/voice/respond` | Required | Configured LLM | Accepts transcript, recent conversation, and consent-scoped memory context and returns structured response data. |
 | POST | `/api/voice/synthesize` | Required | Timbre | Accepts response text and returns base64-encoded playable audio data. |
-| GET | `/api/voice/evon/status` | Required | Local Evon | Reports whether the local Transformers model is disabled, not loaded, loading, ready, or unavailable. |
+| GET | `/api/voice/llm/status` | Required | Gemini | Reports Gemini configuration and availability status. |
 
 This section keeps provider calls on the backend and separates speech
 recognition, reasoning, and speech synthesis. Prisma uses the documented
@@ -94,10 +93,11 @@ recognition, reasoning, and speech synthesis. Prisma uses the documented
 backend-only. Provider timeouts, authentication failures, invalid audio, and
 invalid provider responses are surfaced as explicit errors.
 
-Evon runs only through the local Transformers adapter using
-`gnani/gnani-evon-v3.3-30B-A3B`. Loading is lazy, cached after success or
-failure, serialized to one inference at a time, and never occurs during FastAPI
-startup. `GET /api/voice/evon/status` reports the current local model state.
+Gemini is the only provider through the official `google-genai` SDK and uses
+`gemini-2.5-flash` by default. It receives the shared Saanidhya prompt, recent
+conversation, and consent-scoped memory context. The service limits concurrency,
+applies inference timeouts, logs duration without prompt content, and returns
+explicit errors without silently falling back.
 
 ## 5. Conversational Memory
 
@@ -273,7 +273,7 @@ execution transitions are not fully implemented.
 | Elderly check-ins | Partially implemented; provider calls and interrupted-session cleanup remain |
 | Voice route contracts | Implemented |
 | Prisma/Timbre provider calls | Implemented when their backend API keys are configured |
-| Evon inference | Local Transformers implementation; the published weights are approximately 63.5 GB before runtime overhead and do not fit the development laptop's 4 GB VRAM/8.3 GB RAM |
+| LLM inference | Gemini-only implementation; provider failures never silently fall back |
 | Memory storage | Implemented with user-scoped MongoDB access |
 | Memory intelligence | Partial; regex extraction and recency ranking only |
 | Memory consent | Implemented |

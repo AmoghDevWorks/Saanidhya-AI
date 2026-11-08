@@ -186,7 +186,7 @@ export const ElderlyDashboard = () => {
               <Heart size={20} className="text-rose-500" />
               Daily Wellness Highlights
             </h2>
-            <span className="text-xs text-slate-400">Powered by Evon AI</span>
+            <span className="text-xs text-slate-400">Powered by Gemini AI</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">

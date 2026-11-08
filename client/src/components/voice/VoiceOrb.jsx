@@ -41,7 +41,7 @@ export const VoiceOrb = ({ state = 'idle', size = 'lg', onOrbClick }) => {
       ringColor: 'border-indigo-400/35',
       glow: 'shadow-indigo-500/30',
       badge: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-      label: 'Understanding conversation (Evon AI)...',
+      label: 'Understanding conversation (Gemini AI)...',
       sublabel: 'Analyzing wellness and context',
       icon: Sparkles,
     },

@@ -82,31 +82,29 @@ class Settings(BaseModel):
     TIMBRE_LANGUAGE: str = Field(
         default_factory=lambda: os.getenv("TIMBRE_LANGUAGE", "auto")
     )
-    EVON_MODEL_ID: str = Field(
-        default_factory=lambda: os.getenv(
-            "EVON_MODEL_ID", "gnani/gnani-evon-v3.3-30B-A3B"
-        )
+    LLM_PROVIDER: str = Field(
+        default_factory=lambda: os.getenv("LLM_PROVIDER", "gemini")
     )
-    EVON_INFERENCE_MODE: str = Field(
-        default_factory=lambda: os.getenv("EVON_INFERENCE_MODE", "local")
+    GEMINI_API_KEY: str = Field(
+        default_factory=lambda: os.getenv("GEMINI_API_KEY", "")
     )
-    EVON_ENABLED: bool = Field(
-        default_factory=lambda: os.getenv("EVON_ENABLED", "true").lower() == "true"
+    GEMINI_MODEL: str = Field(
+        default_factory=lambda: os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     )
-    EVON_DEVICE_MAP: str = Field(
-        default_factory=lambda: os.getenv("EVON_DEVICE_MAP", "auto")
+    GEMINI_TEMPERATURE: float = Field(
+        default_factory=lambda: float(os.getenv("GEMINI_TEMPERATURE", "0.7"))
     )
-    EVON_MODEL_CACHE_DIR: str = Field(
-        default_factory=lambda: os.getenv("EVON_MODEL_CACHE_DIR", "./model_cache")
+    GEMINI_MAX_OUTPUT_TOKENS: int = Field(
+        default_factory=lambda: int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "256"))
     )
-    EVON_MAX_NEW_TOKENS: int = Field(
-        default_factory=lambda: int(os.getenv("EVON_MAX_NEW_TOKENS", "256"))
+    GEMINI_CONNECT_TIMEOUT_SECONDS: float = Field(
+        default_factory=lambda: float(os.getenv("GEMINI_CONNECT_TIMEOUT_SECONDS", "10"))
     )
-    EVON_MAX_CONCURRENT_REQUESTS: int = Field(
-        default_factory=lambda: int(os.getenv("EVON_MAX_CONCURRENT_REQUESTS", "1"))
+    GEMINI_INFERENCE_TIMEOUT_SECONDS: float = Field(
+        default_factory=lambda: float(os.getenv("GEMINI_INFERENCE_TIMEOUT_SECONDS", "120"))
     )
-    EVON_INFERENCE_TIMEOUT_SECONDS: float = Field(
-        default_factory=lambda: float(os.getenv("EVON_INFERENCE_TIMEOUT_SECONDS", "120"))
+    GEMINI_MAX_CONCURRENT_REQUESTS: int = Field(
+        default_factory=lambda: int(os.getenv("GEMINI_MAX_CONCURRENT_REQUESTS", "2"))
     )
 
 

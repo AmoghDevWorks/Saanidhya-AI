@@ -1,5 +1,0 @@
-# Install a PyTorch build selected for the host's actual CPU/CUDA environment
-# before installing this file. Do not select a CUDA wheel blindly on Windows.
-transformers>=5.8.1
-accelerate>=1.10.0
-safetensors>=0.5.3

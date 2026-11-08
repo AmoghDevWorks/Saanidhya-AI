@@ -14,7 +14,8 @@ from app.schemas.voice import (
 )
 from app.services.gnani_service import (
     GnaniIntegrationUnavailable,
-    evon_service,
+    generate_llm_response,
+    llm_status,
     prisma_service,
     timbre_service,
 )
@@ -23,12 +24,12 @@ logger = logging.getLogger("saanidhya.voice")
 router = APIRouter(prefix="", tags=["Voice"])
 
 
-@router.get("/evon/status")
-async def evon_status(
+@router.get("/llm/status")
+async def llm_status_route(
     current_user: UserResponse = Depends(get_current_user),
 ):
     del current_user
-    return evon_service.status()
+    return await llm_status()
 
 
 @router.post("/transcribe", response_model=TranscriptionResponse)
@@ -76,7 +77,7 @@ async def respond(
 ):
     del current_user
     try:
-        return await evon_service.respond(
+        return await generate_llm_response(
             payload.transcript, payload.conversation, payload.language,
             payload.memory_context,
         )
@@ -85,8 +86,8 @@ async def respond(
     except GnaniIntegrationUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
-        logger.exception("Evon response generation failed")
-        raise HTTPException(status_code=502, detail="Evon request failed.") from exc
+        logger.exception("LLM response generation failed")
+        raise HTTPException(status_code=502, detail="LLM request failed.") from exc
 
 
 @router.post("/synthesize", response_model=SynthesisResponse)

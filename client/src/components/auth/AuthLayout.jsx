@@ -203,11 +203,11 @@ export const AuthLayout = ({
                 </p>
               </div>
 
-              {/* Evon Reasoning Extraction Badge */}
+              {/* Reasoning extraction badge */}
               <div className="p-2.5 rounded-xl bg-teal-50 border border-teal-200/80 text-teal-900 flex items-center gap-2 text-[11px]">
                 <Brain size={15} className="text-teal-700 flex-shrink-0" />
                 <span>
-                  <strong>Evon Reasoning:</strong> Medication confirmed taken
+                  <strong>Gemini Reasoning:</strong> Medication confirmed taken
                   &bull; Mild knee discomfort logged &bull; Family alert updated
                 </span>
               </div>
