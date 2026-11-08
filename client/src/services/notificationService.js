@@ -51,6 +51,16 @@ const notificationService = {
     const response = await api.patch(`/api/family/relationships/${id}/permissions`, { permissions });
     return response.data;
   },
+
+  async getFamilyConsent() {
+    const response = await api.get('/api/family/consent');
+    return response.data;
+  },
+
+  async updateFamilyConsent(payload) {
+    const response = await api.patch('/api/family/consent', payload);
+    return response.data;
+  },
 };
 
 export default notificationService;

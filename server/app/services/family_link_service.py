@@ -109,7 +109,10 @@ def accept_invitation(
         invitations.find_one_and_update(
             {"_id": invitation["_id"], "status": "pending"}, update
         )
-    return relationship
+    return {
+        **relationship,
+        "id": relationship["_id"],
+    }
 
 
 def reject_invitation(current_user, token: str, invitations: Collection) -> None:

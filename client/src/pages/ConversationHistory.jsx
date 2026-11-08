@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/common/Navbar';
 import checkinService from '../services/checkinService';
+import { useAuth } from '../context/useAuth';
 import {
   Clock,
   Calendar,
@@ -14,27 +15,34 @@ import {
 } from 'lucide-react';
 
 export const ConversationHistory = () => {
+  const { user } = useAuth();
+  const isFamily = user?.accountType === 'family';
   const [history, setHistory] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedId, setExpandedId] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
     const loadHistory = async () => {
       try {
-        const data = await checkinService.getHistory();
+        const data = isFamily
+          ? await checkinService.getFamilyHistory()
+          : await checkinService.getHistory();
         if (isMounted && data) {
           setHistory(data);
         }
       } catch (err) {
-        console.warn('Could not load history:', err);
+        if (isMounted) {
+          setError(err.response?.data?.detail || 'Unable to load conversation history.');
+        }
       }
     };
     loadHistory();
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isFamily]);
 
   const filteredHistory = history.filter((item) => {
     if (!searchTerm.trim()) return true;
@@ -62,7 +70,7 @@ export const ConversationHistory = () => {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Link
-                to="/dashboard"
+              to={isFamily ? '/family' : '/dashboard'}
                 className="text-xs font-bold text-slate-500 hover:text-slate-900 flex items-center gap-1"
               >
                 <ArrowLeft size={14} /> Back
@@ -70,10 +78,12 @@ export const ConversationHistory = () => {
             </div>
             <h1 className="text-2xl sm:text-3xl font-display font-bold text-slate-900 flex items-center gap-2.5">
               <Clock size={26} className="text-blue-600" />
-              Conversation History &amp; Reflections
+              {isFamily ? 'Senior Conversation History' : 'Conversation History & Reflections'}
             </h1>
             <p className="text-sm text-slate-600 mt-1">
-              Chronological log of voice check-ins, medication confirmations, and wellness indicators.
+              {isFamily
+                ? 'Shared check-in conversations permitted by the senior.'
+                : 'Chronological log of voice check-ins, medication confirmations, and wellness indicators.'}
             </p>
           </div>
 
@@ -89,6 +99,12 @@ export const ConversationHistory = () => {
             />
           </div>
         </div>
+
+        {error && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            {error}
+          </div>
+        )}
 
         {/* History List */}
         <div className="space-y-4">

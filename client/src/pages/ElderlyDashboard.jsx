@@ -4,6 +4,7 @@ import { useAuth } from '../context/useAuth';
 import Navbar from '../components/common/Navbar';
 import VoiceOrb from '../components/voice/VoiceOrb';
 import checkinService from '../services/checkinService';
+import reminderService from '../services/reminderService';
 import {
   Mic,
   Calendar,
@@ -11,13 +12,10 @@ import {
   Heart,
   Pill,
   Smile,
-  PhoneCall,
   ArrowRight,
   CheckCircle2,
   Sparkles,
-  Volume2,
-  Bell,
-  X,
+  Users,
 } from 'lucide-react';
 
 export const ElderlyDashboard = () => {
@@ -26,14 +24,15 @@ export const ElderlyDashboard = () => {
 
   const [summaryData, setSummaryData] = useState({
     hasCheckedInToday: false,
-    mood: 'Not available',
-    medicationStatus: 'Not available',
-    wellnessNotes: 'No check-in data is available yet.',
+    mood: null,
+    medicationStatus: null,
+    wellnessNotes: null,
     followUp: null,
     recentCheckins: [],
   });
-  const [contactFamilyOpen, setContactFamilyOpen] = useState(false);
-  const [remindersOpen, setRemindersOpen] = useState(false);
+  const [reminders, setReminders] = useState([]);
+  const [dashboardError, setDashboardError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   // Time-aware greeting
   const getGreeting = () => {
@@ -54,12 +53,18 @@ export const ElderlyDashboard = () => {
     let isMounted = true;
     const fetchSummary = async () => {
       try {
-        const data = await checkinService.getTodaySummary();
+        const [data, reminderData] = await Promise.all([
+          checkinService.getTodaySummary(),
+          reminderService.list(),
+        ]);
         if (isMounted && data) {
           setSummaryData(data);
+          setReminders(reminderData || []);
         }
       } catch (err) {
-        console.warn('Could not load summary:', err);
+        if (isMounted) setDashboardError(err.response?.data?.detail || err.message);
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
     };
     fetchSummary();
@@ -73,6 +78,12 @@ export const ElderlyDashboard = () => {
       <Navbar />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-8">
+        {dashboardError && (
+          <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+            {dashboardError}
+          </p>
+        )}
+        {isLoading && <p className="text-sm text-slate-500">Loading your dashboard...</p>}
         {/* ================= 1. WELCOME SECTION ================= */}
         <section className="bg-white/80 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-1.5">
@@ -81,11 +92,11 @@ export const ElderlyDashboard = () => {
                 <Calendar size={13} /> {formattedDate}
               </span>
               <span className="text-xs font-semibold text-slate-500">
-                &bull; Kannada, Hindi &amp; English
+                &bull; Daily wellness companion
               </span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-display font-bold text-slate-900 tracking-tight">
-              {getGreeting()}, {user?.fullName || 'Grandmother'}! 💙
+              {getGreeting()}, {user?.fullName || 'there'}! 💙
             </h1>
             <p className="text-base sm:text-lg text-slate-600 font-medium">
               It&apos;s lovely to have you here today. How are you feeling?
@@ -179,6 +190,33 @@ export const ElderlyDashboard = () => {
           </div>
         </section>
 
+        <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Your reminders</h2>
+              <p className="text-sm text-slate-500">Reminders created by you or an approved family member.</p>
+            </div>
+            <Link to="/reminders" className="text-sm font-bold text-blue-600">Manage reminders</Link>
+          </div>
+          {reminders.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+              No reminders scheduled yet.
+            </p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {reminders.slice(0, 6).map((reminder) => (
+                <div key={reminder.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="font-bold text-slate-900">{reminder.title}</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {reminder.reminder_time} · {reminder.frequency}
+                  </p>
+                  {reminder.description && <p className="mt-1 text-xs text-slate-500">{reminder.description}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* ================= 3. DAILY WELLNESS SUMMARY ================= */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
@@ -200,14 +238,14 @@ export const ElderlyDashboard = () => {
                   Today&apos;s Mood
                 </p>
                 <h3 className="text-xl font-bold text-slate-900 mb-2">
-                  {summaryData.mood}
+                  {summaryData.mood || 'Not recorded'}
                 </h3>
                 <p className="text-sm text-slate-600 leading-relaxed">
-                  Cheerful and calm tone detected during voice conversation.
+                  {summaryData.wellnessNotes || 'No wellness observation recorded yet.'}
                 </p>
               </div>
               <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-500">
-                Status: Warm &amp; Receptive
+                {summaryData.hasCheckedInToday ? "Status: Based on today's check-in" : 'No check-in recorded today'}
               </div>
             </div>
 
@@ -221,14 +259,14 @@ export const ElderlyDashboard = () => {
                   Medication Check
                 </p>
                 <h3 className="text-xl font-bold text-slate-900 mb-2">
-                  {summaryData.medicationStatus.includes('Confirmed') ? 'Confirmed Taken' : 'Pending Check-in'}
+                  {summaryData.medicationStatus?.includes('Confirmed') ? 'Confirmed Taken' : 'Not recorded'}
                 </h3>
                 <p className="text-sm text-slate-600 leading-relaxed">
                   {summaryData.medicationStatus}
                 </p>
               </div>
               <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-teal-700 font-medium">
-                Next: Evening Calcium (8:30 PM)
+                {summaryData.medicationStatus || 'No medication information recorded.'}
               </div>
             </div>
 
@@ -242,7 +280,7 @@ export const ElderlyDashboard = () => {
                   Wellness Observation
                 </p>
                 <h3 className="text-base font-bold text-slate-900 mb-2">
-                  Mild Knee Comfort Follow-up
+                  {summaryData.followUp || 'No follow-up recorded'}
                 </h3>
                 <p className="text-sm text-slate-600 leading-relaxed">
                   {summaryData.wellnessNotes}
@@ -297,99 +335,26 @@ export const ElderlyDashboard = () => {
             </Link>
 
             <button
-              onClick={() => setRemindersOpen(true)}
+              onClick={() => navigate('/reminders')}
               className="p-5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/90 rounded-2xl flex flex-col items-center justify-center text-center gap-2 shadow-xs transition-all cursor-pointer"
             >
               <Pill size={24} className="text-teal-600" />
-              <span className="text-sm font-bold">View Reminders</span>
+              <span className="text-sm font-bold">
+                {reminders.length ? `View Reminders (${reminders.length})` : 'View Reminders'}
+              </span>
             </button>
 
             <button
-              onClick={() => setContactFamilyOpen(true)}
+              onClick={() => navigate('/family/relationships')}
               className="p-5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/90 rounded-2xl flex flex-col items-center justify-center text-center gap-2 shadow-xs transition-all cursor-pointer"
             >
-              <PhoneCall size={24} className="text-emerald-600" />
-              <span className="text-sm font-bold">Contact Family</span>
+              <Users size={24} className="text-emerald-600" />
+              <span className="text-sm font-bold">Family Connections</span>
             </button>
           </div>
         </section>
       </main>
 
-      {/* ================= MODAL: CONTACT FAMILY ================= */}
-      {contactFamilyOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <PhoneCall size={20} className="text-emerald-600" />
-                Contact Family Member
-              </h3>
-              <button
-                onClick={() => setContactFamilyOpen(false)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <p className="text-sm text-slate-600">
-              Your family caregiver is connected to Saanidhya AI. You can reach out directly:
-            </p>
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-              <p className="font-bold text-slate-900">Ananya Rao (Daughter)</p>
-              <p className="text-xs text-slate-500">Bengaluru &bull; Connected via Family Portal</p>
-              <p className="text-sm font-mono text-blue-600 font-semibold">+91 98450 12345</p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => {
-                  alert('Dialing family member (+91 98450 12345)...');
-                  setContactFamilyOpen(false);
-                }}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-colors cursor-pointer"
-              >
-                Call Daughter
-              </button>
-              <button
-                onClick={() => setContactFamilyOpen(false)}
-                className="px-5 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl text-sm hover:bg-slate-50 cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL: VIEW REMINDERS ================= */}
-      {remindersOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Bell size={20} className="text-teal-600" />
-                Today&apos;s Medication &amp; Care Reminders
-              </h3>
-              <button
-                onClick={() => setRemindersOpen(false)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="space-y-2.5">
-              <p className="rounded-2xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
-                Reminders are managed from the reminders page and will appear here when configured.
-              </p>
-            </div>
-            <button
-              onClick={() => setRemindersOpen(false)}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-colors cursor-pointer mt-2"
-            >
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

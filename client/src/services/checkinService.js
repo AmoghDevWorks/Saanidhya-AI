@@ -70,6 +70,11 @@ export const checkinService = {
     const response = await api.get('/api/checkin/history');
     return response.data;
   },
+
+  async getFamilyHistory() {
+    const response = await api.get('/api/family/history');
+    return response.data;
+  },
 };
 
 export default checkinService;

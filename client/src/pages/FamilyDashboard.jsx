@@ -12,21 +12,25 @@ import {
   Calendar,
   CheckCircle2,
   Info,
-  Phone,
-  Plus,
   ArrowRight,
   Sparkles,
-  X,
-  Bell,
 } from 'lucide-react';
 
 export const FamilyDashboard = () => {
   const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState(null);
-  const [newReminderOpen, setNewReminderOpen] = useState(false);
-  const [reminderTitle, setReminderTitle] = useState('');
-  const [reminderTime, setReminderTime] = useState('02:00 PM');
-  const [reminderFrequency, setReminderFrequency] = useState('Daily');
+  const [dashboardError, setDashboardError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [showReminderForm, setShowReminderForm] = useState(false);
+  const [reminderForm, setReminderForm] = useState({
+    title: '',
+    category: 'routine',
+    description: '',
+    reminder_time: '08:00',
+    frequency: 'daily',
+    start_date: new Date().toISOString().slice(0, 10),
+    timezone: 'Asia/Kolkata',
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -37,7 +41,9 @@ export const FamilyDashboard = () => {
           setDashboardData(data);
         }
       } catch (err) {
-        console.warn('Could not load family dashboard data:', err);
+        if (isMounted) setDashboardError(err.response?.data?.detail || err.message);
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
     };
     loadDashboard();
@@ -59,43 +65,20 @@ export const FamilyDashboard = () => {
         };
       });
     } catch (err) {
-      console.warn('Error acknowledging alert:', err);
+      setDashboardError(err.response?.data?.detail || err.message);
     }
   };
 
-  const handleCreateReminder = async (e) => {
-    e.preventDefault();
-    if (!reminderTitle.trim()) return;
-
+  const handleCreateReminder = async (event) => {
+    event.preventDefault();
     try {
-      await familyService.createReminder({
-        title: reminderTitle,
-        time: reminderTime,
-        frequency: reminderFrequency,
-      });
-
-      // Add to local state
-      setDashboardData((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          reminders: [
-            ...prev.reminders,
-            {
-              id: `rem-${Date.now()}`,
-              title: reminderTitle,
-              time: reminderTime,
-              frequency: reminderFrequency,
-              status: 'Scheduled',
-            },
-          ],
-        };
-      });
-
-      setReminderTitle('');
-      setNewReminderOpen(false);
+      await familyService.createReminder(reminderForm);
+      setReminderForm((current) => ({ ...current, title: '', description: '' }));
+      setShowReminderForm(false);
+      const data = await familyService.getFamilyDashboard();
+      setDashboardData(data);
     } catch (err) {
-      console.warn('Error creating reminder:', err);
+      setDashboardError(err.response?.data?.detail || err.message);
     }
   };
 
@@ -104,6 +87,8 @@ export const FamilyDashboard = () => {
       <Navbar />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-8">
+        {dashboardError && <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{dashboardError}</p>}
+        {isLoading && <p className="text-sm text-slate-500">Loading family dashboard...</p>}
         {/* ================= 1. WELCOME SECTION ================= */}
         <section className="bg-white/80 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-1.5">
@@ -125,20 +110,62 @@ export const FamilyDashboard = () => {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setNewReminderOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+              type="button"
+              onClick={() => setShowReminderForm((open) => !open)}
+              className="rounded-2xl bg-teal-600 px-4 py-2.5 text-xs font-bold text-white"
             >
-              <Plus size={16} />
-              <span>Add Reminder</span>
+              {showReminderForm ? 'Close reminder form' : 'Add reminder for senior'}
             </button>
-            <a
-              href="tel:+919845012345"
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
-            >
-              <Phone size={15} className="text-emerald-600" />
-              <span>Call Senior</span>
-            </a>
+            <Link to="/reminders" className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs transition-colors">
+              View reminders
+            </Link>
           </div>
+        </section>
+
+        {showReminderForm && (
+          <form onSubmit={handleCreateReminder} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-2">
+            <input required placeholder="Reminder title" value={reminderForm.title} onChange={(event) => setReminderForm({ ...reminderForm, title: event.target.value })} className="rounded-xl border border-slate-300 px-3 py-3" />
+            <select value={reminderForm.category} onChange={(event) => setReminderForm({ ...reminderForm, category: event.target.value })} className="rounded-xl border border-slate-300 px-3 py-3">
+              <option value="routine">Routine</option>
+              <option value="medication">Medication</option>
+              <option value="event">Event</option>
+              <option value="follow_up">Follow-up</option>
+            </select>
+            <input placeholder="Description (optional)" value={reminderForm.description} onChange={(event) => setReminderForm({ ...reminderForm, description: event.target.value })} className="rounded-xl border border-slate-300 px-3 py-3 sm:col-span-2" />
+            <input type="time" required value={reminderForm.reminder_time} onChange={(event) => setReminderForm({ ...reminderForm, reminder_time: event.target.value })} className="rounded-xl border border-slate-300 px-3 py-3" />
+            <select value={reminderForm.frequency} onChange={(event) => setReminderForm({ ...reminderForm, frequency: event.target.value })} className="rounded-xl border border-slate-300 px-3 py-3">
+              <option value="once">Once</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+            <input type="date" required value={reminderForm.start_date} onChange={(event) => setReminderForm({ ...reminderForm, start_date: event.target.value })} className="rounded-xl border border-slate-300 px-3 py-3" />
+            <button type="submit" className="rounded-xl bg-emerald-600 px-4 py-3 font-bold text-white">Save for senior</button>
+          </form>
+        )}
+
+        <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xs">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Shared senior reminders</h2>
+              <p className="text-sm text-slate-500">The same reminders scheduled for the linked senior.</p>
+            </div>
+            <Link to="/reminders" className="text-sm font-bold text-teal-700">Open reminders</Link>
+          </div>
+          {dashboardData?.reminders?.length ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {dashboardData.reminders.map((reminder) => (
+                <div key={reminder.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="font-bold text-slate-900">{reminder.title}</p>
+                  <p className="mt-1 text-sm text-slate-600">{reminder.time} · {reminder.frequency}</p>
+                  <p className="mt-1 text-xs text-slate-500 capitalize">{reminder.status}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+              No shared reminders yet.
+            </p>
+          )}
         </section>
 
         {/* ================= 2. CONNECTED SENIOR PROFILE ================= */}
@@ -146,7 +173,7 @@ export const FamilyDashboard = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-500 to-teal-500 text-white font-display font-bold text-2xl flex items-center justify-center shadow-md shadow-blue-500/20">
-                RK
+                {(dashboardData?.seniorProfile?.name || '?').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -218,16 +245,18 @@ export const FamilyDashboard = () => {
             <p className="text-xs text-emerald-700 font-semibold">Recorded medication information</p>
           </div>
 
-          {/* Caregiver Assurance */}
+          {/* Latest observation */}
           <div className="p-6 bg-white rounded-3xl border border-slate-200/80 shadow-xs space-y-2">
             <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1">
               <Sparkles size={20} />
             </div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Peace of Mind
+              Latest Observation
             </p>
-            <p className="text-2xl font-display font-bold text-slate-900">No data</p>
-            <p className="text-xs text-slate-500">This is not a medical assessment</p>
+            <p className="text-sm font-semibold text-slate-900">
+              {dashboardData?.wellnessOverview?.keyObservation || 'No observation recorded'}
+            </p>
+            <p className="text-xs text-slate-500">Supportive information, not a medical assessment</p>
           </div>
         </section>
 
@@ -350,84 +379,6 @@ export const FamilyDashboard = () => {
         </section>
       </main>
 
-      {/* ================= MODAL: ADD REMINDER ================= */}
-      {newReminderOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Bell size={20} className="text-teal-600" />
-                Schedule Senior Care Reminder
-              </h3>
-              <button
-                onClick={() => setNewReminderOpen(false)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={handleCreateReminder} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  Reminder Title
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Afternoon warm water or Vitamin D"
-                  value={reminderTitle}
-                  onChange={(e) => setReminderTitle(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                    Time
-                  </label>
-                  <input
-                    type="text"
-                    value={reminderTime}
-                    onChange={(e) => setReminderTime(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                    Frequency
-                  </label>
-                  <select
-                    value={reminderFrequency}
-                    onChange={(e) => setReminderFrequency(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500"
-                  >
-                    <option value="Daily">Daily</option>
-                    <option value="Morning">Morning</option>
-                    <option value="Evening">Evening</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  className="flex-1 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-sm transition-colors cursor-pointer"
-                >
-                  Save Reminder
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNewReminderOpen(false)}
-                  className="px-5 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl text-sm hover:bg-slate-50 cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

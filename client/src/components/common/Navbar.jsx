@@ -28,6 +28,9 @@ export const Navbar = () => {
     { name: 'Talk to Saanidhya', path: '/check-in', icon: Mic, highlight: true },
     { name: 'My Conversations', path: '/history', icon: Clock },
     { name: 'My Memories', path: '/memories', icon: Brain },
+    { name: 'Reminders', path: '/reminders', icon: CalendarClock },
+    { name: 'Family Connections', path: '/family/relationships', icon: Users },
+    { name: 'Notifications', path: '/notifications', icon: Bell },
   ];
 
   const familyNavLinks = [

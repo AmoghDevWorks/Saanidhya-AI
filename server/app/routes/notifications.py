@@ -284,20 +284,24 @@ async def list_notifications(
     relationships: Collection = Depends(get_relationships_collection),
     users: Collection = Depends(get_users_collection),
 ):
-    require_family(current_user)
+    if current_user.account_type.value not in {"family", "elderly"}:
+        raise HTTPException(status_code=403, detail="Unsupported account type.")
     raw_items = list(
         notifications.find({"recipient_user_id": current_user.id})
         .sort("created_at", -1)
         .limit(50)
     )
-    elderly_ids = set(linked_senior_ids(
-        relationships, users, current_user.id, "notifications_enabled"
-    ))
-    items = [
-        item for item in raw_items
-        if not item.get("alert_id")
-        or (alerts.find_one({"_id": item["alert_id"]}) or {}).get("elderly_user_id") in elderly_ids
-    ]
+    if current_user.account_type.value == "elderly":
+        items = raw_items
+    else:
+        elderly_ids = set(linked_senior_ids(
+            relationships, users, current_user.id, "notifications_enabled"
+        ))
+        items = [
+            item for item in raw_items
+            if not item.get("alert_id")
+            or (alerts.find_one({"_id": item["alert_id"]}) or {}).get("elderly_user_id") in elderly_ids
+        ]
     return NotificationListResponse(
         items=[notification_response(item) for item in items],
         unread_count=sum(1 for item in items if not item.get("read", False)),
@@ -312,6 +316,12 @@ async def unread_notifications(
     alerts: Collection = Depends(get_alerts_collection),
     users: Collection = Depends(get_users_collection),
 ):
+    if current_user.account_type.value == "elderly":
+        return {
+            "unread_count": notifications.count_documents(
+                {"recipient_user_id": current_user.id, "read": False}
+            )
+        }
     require_family(current_user)
     raw_items = notifications.find({"recipient_user_id": current_user.id, "read": False})
     elderly_ids = set(linked_senior_ids(
@@ -334,6 +344,14 @@ async def mark_notification_read(
     alerts: Collection = Depends(get_alerts_collection),
     users: Collection = Depends(get_users_collection),
 ):
+    if current_user.account_type.value == "elderly":
+        result = notifications.update_one(
+            {"_id": notification_id, "recipient_user_id": current_user.id},
+            {"$set": {"read": True}},
+        )
+        if not result.matched_count:
+            raise HTTPException(status_code=404, detail="Notification not found.")
+        return
     require_family(current_user)
     item = notifications.find_one(
         {"_id": notification_id, "recipient_user_id": current_user.id}
@@ -363,6 +381,12 @@ async def mark_all_notifications_read(
     alerts: Collection = Depends(get_alerts_collection),
     users: Collection = Depends(get_users_collection),
 ):
+    if current_user.account_type.value == "elderly":
+        notifications.update_many(
+            {"recipient_user_id": current_user.id, "read": False},
+            {"$set": {"read": True}},
+        )
+        return
     require_family(current_user)
     elderly_ids = set(linked_senior_ids(
         relationships, users, current_user.id, "notifications_enabled"

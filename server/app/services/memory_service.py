@@ -1,6 +1,6 @@
 import uuid
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, time, timezone, timedelta
 from typing import Dict, Any, List, Optional
 from pymongo.collection import Collection
 from pymongo.errors import PyMongoError
@@ -259,7 +259,11 @@ def get_family_dashboard_data(
                     ReminderItem(
                         id=str(doc["_id"]),
                         title=doc["title"],
-                        time=doc["reminder_time"].strftime("%I:%M %p"),
+                        time=(
+                            time.fromisoformat(doc["reminder_time"]).strftime("%I:%M %p")
+                            if isinstance(doc.get("reminder_time"), str)
+                            else doc["reminder_time"].strftime("%I:%M %p")
+                        ),
                         frequency=doc["frequency"],
                         status=doc.get("status", "scheduled"),
                     )
@@ -269,7 +273,7 @@ def get_family_dashboard_data(
 
     senior_profile = SeniorProfile(
         name=senior_name,
-        relationship="Father",
+        relationship="Connected family member",
         age=0,
         preferredLanguage=senior.get("preferred_language") or "Not provided",
         lastCheckinTime=(
