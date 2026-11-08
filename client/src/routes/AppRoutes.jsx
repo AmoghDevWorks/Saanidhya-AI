@@ -6,6 +6,7 @@ import FamilyDashboard from '../pages/FamilyDashboard';
 import VoiceCheckin from '../pages/VoiceCheckin';
 import ConversationHistory from '../pages/ConversationHistory';
 import ProtectedRoute from './ProtectedRoute';
+import Memories from '../pages/Memories';
 import { useAuth } from '../context/useAuth';
 
 const RootRedirect = () => {
@@ -64,6 +65,14 @@ export const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <ConversationHistory />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/memories"
+        element={
+          <ProtectedRoute>
+            <Memories />
           </ProtectedRoute>
         }
       />

@@ -10,6 +10,7 @@ import {
   Menu,
   X,
   Users,
+  Brain,
 } from 'lucide-react';
 
 export const Navbar = () => {
@@ -24,6 +25,7 @@ export const Navbar = () => {
     { name: 'Home', path: '/dashboard', icon: Home },
     { name: 'Talk to Saanidhya', path: '/check-in', icon: Mic, highlight: true },
     { name: 'My Conversations', path: '/history', icon: Clock },
+    { name: 'My Memories', path: '/memories', icon: Brain },
   ];
 
   const familyNavLinks = [

@@ -69,6 +69,7 @@ def register_user(
         "is_active": True,
         "created_at": now,
         "updated_at": now,
+        "memory_consent": False,
     }
 
     try:

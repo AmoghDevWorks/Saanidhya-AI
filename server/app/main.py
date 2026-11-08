@@ -8,6 +8,8 @@ from app.database import init_indexes, close_mongo_connection
 from app.routes.auth import router as auth_router
 from app.routes.checkin import router as checkin_router
 from app.routes.family import router as family_router
+from app.routes.voice import router as voice_router
+from app.routes.memory import router as memory_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -56,6 +58,8 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/auth")
 app.include_router(checkin_router, prefix="/api/checkin")
 app.include_router(family_router, prefix="/api/family")
+app.include_router(voice_router, prefix="/api/voice")
+app.include_router(memory_router)
 
 
 @app.get("/", tags=["Health"])

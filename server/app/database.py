@@ -71,6 +71,12 @@ def get_reminders_collection() -> Collection:
     return db["reminders"]
 
 
+def get_memories_collection() -> Collection:
+    """Dependency injection helper for private conversational memories."""
+    db = get_database()
+    return db["memories"]
+
+
 def init_indexes():
     """Initialize database indexes on startup (e.g. unique email index)."""
     if is_placeholder_uri(settings.MONGODB_URI):
@@ -84,6 +90,13 @@ def init_indexes():
         # Create unique ascending index on email
         users.create_index([("email", ASCENDING)], unique=True, background=True)
         logger.info("Successfully created/verified unique index on users.email")
+        memories = get_memories_collection()
+        memories.create_index(
+            [("user_id", ASCENDING), ("created_at", -1)], background=True
+        )
+        memories.create_index(
+            [("user_id", ASCENDING), ("category", ASCENDING)], background=True
+        )
     except Exception as e:
         logger.warning(
             f"Could not initialize MongoDB indexes (will retry on active connection): {e}"
